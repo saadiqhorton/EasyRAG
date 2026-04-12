@@ -1,0 +1,43 @@
+[project]
+name = "rag-kb-backend"
+version = "0.1.0"
+description = "RAG Knowledge Base Framework - Backend API"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn[standard]",
+    "sqlalchemy[asyncio]>=2.0",
+    "asyncpg",
+    "alembic>=1.13",
+    "qdrant-client[fastembed]>=1.12",
+    "docling>=2.0",
+    "sentence-transformers",
+    "pydantic>=2.0",
+    "pydantic-settings",
+    "python-multipart",
+    "httpx",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "httpx",
+    "ruff",
+    "aiosqlite",
+]
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.backends._legacy:_Backend"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
