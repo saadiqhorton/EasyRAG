@@ -79,9 +79,17 @@ if [ ! -f "${ENV_FILE}" ]; then
   ok "Generated secure POSTGRES_PASSWORD"
 else
   step "Using existing .env"
+  # Show current provider config if already set
+  CURRENT_PROVIDER=$(grep "^LLM_PROVIDER=" "${ENV_FILE}" 2>/dev/null | cut -d= -f2 || echo "")
+  if [ -n "${CURRENT_PROVIDER}" ] && [ "${CURRENT_PROVIDER}" != "ollama" ]; then
+    ok "LLM provider already configured: ${CURRENT_PROVIDER}"
+    echo "  To switch provider, edit ${ENV_FILE} and restart"
+  fi
 fi
 
 # ── Provider selection ───────────────────────────────────────────
+# Only prompt if LLM_PROVIDER is not set or is still default "ollama"
+# This allows reruns to preserve existing provider config
 if grep -q "^LLM_PROVIDER=ollama$" "${ENV_FILE}" 2>/dev/null || ! grep -q "^LLM_PROVIDER=" "${ENV_FILE}" 2>/dev/null; then
   echo ""
   banner "Choose your AI provider"
@@ -103,6 +111,7 @@ if grep -q "^LLM_PROVIDER=ollama$" "${ENV_FILE}" 2>/dev/null || ! grep -q "^LLM_
       LLM_API_KEY=""
       echo ""
       echo "  Ollama selected. Make sure Ollama is running with: ${CYAN}ollama serve${NC}"
+      echo "  On Linux, use http://172.17.0.1:11434/v1 as the base URL."
       echo ""
       read -r -p "Ollama base URL [${LLM_BASE_URL}]: " base_url < /dev/tty
       LLM_BASE_URL="${base_url:-${LLM_BASE_URL}}"
@@ -214,6 +223,8 @@ else
 fi
 
 # ── Success ──────────────────────────────────────────────────────
+PROVIDER_DISPLAY=$(grep "^LLM_PROVIDER=" "${ENV_FILE}" 2>/dev/null | cut -d= -f2 || echo "ollama")
+
 echo ""
 banner "🚀 EasyRAG is running!"
 echo ""
@@ -223,11 +234,13 @@ echo "  Next steps:"
 echo "    • Create a collection and upload documents"
 echo "    • Ask questions and get cited answers"
 echo ""
-echo "  Provider: ${CYAN}${LLM_PROVIDER:-ollama}${NC}"
+echo "  AI provider:     ${CYAN}${PROVIDER_DISPLAY}${NC}"
 echo ""
 echo "  Useful commands:"
 echo "    View logs:   docker compose -f ${COMPOSE_FILE} logs -f"
 echo "    Stop:        docker compose -f ${COMPOSE_FILE} down"
 echo "    Diagnose:    bash ${INSTALL_DIR}/doctor.sh"
 echo "    Uninstall:   bash ${INSTALL_DIR}/uninstall.sh"
+echo ""
+echo "  To switch provider: edit ${ENV_FILE} and restart"
 echo ""

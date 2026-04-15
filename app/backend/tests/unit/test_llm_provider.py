@@ -6,6 +6,7 @@ from app.backend.services.llm_provider import (
     AnthropicProvider,
     BaseLLMProvider,
     GeminiProvider,
+    LLMProviderError,
     LLMProviderType,
     OpenAICompatibleProvider,
     PROVIDER_DEFAULTS,
@@ -29,11 +30,11 @@ class TestCreateProvider:
         assert provider.api_key == "sk-test"
 
     def test_anthropic_creates_anthropic_provider(self):
-        provider = create_provider("anthropic", "https://api.anthropic.com", "claude-sonnet-4-20250514", "sk-test")
+        provider = create_provider("anthropic", "https://api.anthropic.com", "claude-sonnet-4-20250514", "sk-ant-test")
         assert isinstance(provider, AnthropicProvider)
 
     def test_gemini_creates_gemini_provider(self):
-        provider = create_provider("gemini", "https://generativelanguage.googleapis.com", "gemini-2.0-flash", "test-key")
+        provider = create_provider("gemini", "https://generativelanguage.googleapis.com", "gemini-2.0-flash", "AIza-test")
         assert isinstance(provider, GeminiProvider)
 
     def test_openai_compatible_creates_openai_compatible(self):
@@ -63,32 +64,32 @@ class TestProviderDefaults:
             assert ptype.value in PROVIDER_DEFAULTS
 
     def test_ollama_defaults(self):
-        defaults = PROVIDER_DEFAULTS["ollama"]
-        assert defaults["base_url"] == "http://host.docker.internal:11434/v1"
-        assert defaults["model"] == "llama3.2"
-        assert defaults["requires_api_key"] == "false"
+        d = PROVIDER_DEFAULTS["ollama"]
+        assert d["base_url"] == "http://host.docker.internal:11434/v1"
+        assert d["model"] == "llama3.2"
+        assert d["requires_api_key"] == "false"
 
     def test_openai_defaults(self):
-        defaults = PROVIDER_DEFAULTS["openai"]
-        assert defaults["base_url"] == "https://api.openai.com/v1"
-        assert defaults["model"] == "gpt-4o"
-        assert defaults["requires_api_key"] == "true"
+        d = PROVIDER_DEFAULTS["openai"]
+        assert d["base_url"] == "https://api.openai.com/v1"
+        assert d["model"] == "gpt-4o"
+        assert d["requires_api_key"] == "true"
 
     def test_anthropic_defaults(self):
-        defaults = PROVIDER_DEFAULTS["anthropic"]
-        assert defaults["base_url"] == "https://api.anthropic.com"
-        assert defaults["model"] == "claude-sonnet-4-20250514"
-        assert defaults["requires_api_key"] == "true"
+        d = PROVIDER_DEFAULTS["anthropic"]
+        assert d["base_url"] == "https://api.anthropic.com"
+        assert d["model"] == "claude-sonnet-4-20250514"
+        assert d["requires_api_key"] == "true"
 
     def test_gemini_defaults(self):
-        defaults = PROVIDER_DEFAULTS["gemini"]
-        assert defaults["base_url"] == "https://generativelanguage.googleapis.com"
-        assert defaults["model"] == "gemini-2.0-flash"
-        assert defaults["requires_api_key"] == "true"
+        d = PROVIDER_DEFAULTS["gemini"]
+        assert d["base_url"] == "https://generativelanguage.googleapis.com"
+        assert d["model"] == "gemini-2.0-flash"
+        assert d["requires_api_key"] == "true"
 
 
-class TestAnthropicProviderValidation:
-    """Tests for Anthropic provider requiring API key."""
+class TestProviderValidation:
+    """Tests for provider validation (API key requirements, etc.)."""
 
     @pytest.mark.asyncio
     async def test_anthropic_requires_api_key(self):
@@ -97,12 +98,8 @@ class TestAnthropicProviderValidation:
             model="claude-sonnet-4-20250514",
             api_key=None,
         )
-        with pytest.raises(ValueError, match="API key"):
+        with pytest.raises(LLMProviderError, match="API key"):
             await provider.generate("system", "user")
-
-
-class TestGeminiProviderValidation:
-    """Tests for Gemini provider requiring API key."""
 
     @pytest.mark.asyncio
     async def test_gemini_requires_api_key(self):
@@ -111,5 +108,19 @@ class TestGeminiProviderValidation:
             model="gemini-2.0-flash",
             api_key=None,
         )
-        with pytest.raises(ValueError, match="API key"):
+        with pytest.raises(LLMProviderError, match="API key"):
             await provider.generate("system", "user")
+
+    def test_llm_provider_error_message_format(self):
+        err = LLMProviderError("anthropic", "Auth failed", 401)
+        assert "[anthropic]" in str(err)
+        assert "Auth failed" in str(err)
+        assert err.provider == "anthropic"
+        assert err.status_code == 401
+
+    def test_describe_http_error_common_codes(self):
+        provider = OpenAICompatibleProvider("http://test/v1", "test")
+        assert "API key" in provider._describe_http_error(401, "test")
+        assert "not found" in provider._describe_http_error(404, "test")
+        assert "Rate limit" in provider._describe_http_error(429, "test")
+        assert "403" in provider._describe_http_error(403, "test")

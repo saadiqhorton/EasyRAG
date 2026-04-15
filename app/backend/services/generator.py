@@ -103,7 +103,7 @@ async def _call_llm(system_prompt: str, user_prompt: str) -> str:
             return response.content
         except ValueError as e:
             # Provider validation errors (e.g., missing API key) are not retryable
-            logger.error("llm_validation_error: %s", e)
+            logger.error("llm_validation_error provider=%s: %s", settings.llm_provider, e)
             raise
         except Exception as e:
             # Determine if the error is retryable
@@ -114,18 +114,18 @@ async def _call_llm(system_prompt: str, user_prompt: str) -> str:
                 if status_code in {429, 502, 503, 504}:
                     is_retryable = True
                     if status_code == 429:
-                        logger.warning("llm_rate_limited status=%d", status_code)
+                        logger.warning("llm_rate_limited provider=%s status=%d", settings.llm_provider, status_code)
                     elif status_code >= 500:
-                        logger.warning("llm_server_error status=%d", status_code)
+                        logger.warning("llm_server_error provider=%s status=%d", settings.llm_provider, status_code)
                 elif status_code >= 400:
-                    logger.warning("llm_client_error status=%d", status_code)
+                    logger.warning("llm_client_error provider=%s status=%d", settings.llm_provider, status_code)
                     raise
             else:
                 # Connection or timeout errors are retryable
                 err_type = type(e).__name__
                 if "Timeout" in err_type or "Connect" in err_type:
                     is_retryable = True
-                    logger.warning("llm_%s attempt=%d", err_type.lower(), attempt)
+                    logger.warning("llm_%s provider=%s attempt=%d", err_type.lower(), settings.llm_provider, attempt)
                 else:
                     logger.warning("llm_error: %s", e)
                     raise

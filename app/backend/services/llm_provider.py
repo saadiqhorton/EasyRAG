@@ -36,6 +36,15 @@ class LLMResponse:
     model: str
 
 
+class LLMProviderError(Exception):
+    """Base error for LLM provider issues with actionable context."""
+
+    def __init__(self, provider: str, message: str, status_code: int | None = None):
+        self.provider = provider
+        self.status_code = status_code
+        super().__init__(f"[{provider}] {message}")
+
+
 class BaseLLMProvider(ABC):
     """Abstract base for LLM providers."""
 
@@ -54,6 +63,19 @@ class BaseLLMProvider(ABC):
     ) -> LLMResponse:
         """Generate a completion from the LLM."""
         ...
+
+    def _describe_http_error(self, status_code: int, provider: str) -> str:
+        """Return a human-readable description of common HTTP errors."""
+        descriptions = {
+            401: "Authentication failed. Check your API key (ANSWER_LLM_API_KEY).",
+            403: "Access forbidden. Your API key may not have permission for this model.",
+            404: f"Model '{self.model}' not found. Check that the model name is correct for {provider}.",
+            429: "Rate limit exceeded. Wait a moment and try again.",
+        }
+        return descriptions.get(
+            status_code,
+            f"HTTP {status_code} error from {provider}. Check your configuration and try again.",
+        )
 
 
 class OpenAICompatibleProvider(BaseLLMProvider):
@@ -87,10 +109,25 @@ class OpenAICompatibleProvider(BaseLLMProvider):
 
         url = f"{self.base_url}/chat/completions"
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            message = self._describe_http_error(status, "OpenAI-compatible")
+            raise LLMProviderError("openai-compatible", message, status) from e
+        except httpx.ConnectError as e:
+            raise LLMProviderError(
+                "openai-compatible",
+                f"Cannot connect to {self.base_url}. Is the server running?",
+            ) from e
+        except httpx.TimeoutException as e:
+            raise LLMProviderError(
+                "openai-compatible",
+                f"Request to {self.base_url} timed out after 60s.",
+            ) from e
 
         content = (
             data.get("choices", [{}])[0]
@@ -98,7 +135,10 @@ class OpenAICompatibleProvider(BaseLLMProvider):
             .get("content", "")
         )
         if not content.strip():
-            raise ValueError("LLM returned empty content")
+            raise LLMProviderError(
+                "openai-compatible",
+                f"Model '{self.model}' returned empty content. The model may not support system prompts or may be misconfigured.",
+            )
 
         return LLMResponse(content=content, model=self.model)
 
@@ -117,7 +157,10 @@ class AnthropicProvider(BaseLLMProvider):
         temperature: float = 0.1,
     ) -> LLMResponse:
         if not self.api_key:
-            raise ValueError("Anthropic requires an API key. Set LLM_API_KEY in your config.")
+            raise LLMProviderError(
+                "anthropic",
+                "Anthropic requires an API key. Set ANSWER_LLM_API_KEY in your .env file.",
+            )
 
         headers = {
             "Content-Type": "application/json",
@@ -137,10 +180,25 @@ class AnthropicProvider(BaseLLMProvider):
 
         url = f"{self.base_url}/v1/messages"
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            message = self._describe_http_error(status, "Anthropic")
+            raise LLMProviderError("anthropic", message, status) from e
+        except httpx.ConnectError as e:
+            raise LLMProviderError(
+                "anthropic",
+                f"Cannot connect to {self.base_url}. Check ANSWER_LLM_BASE_URL.",
+            ) from e
+        except httpx.TimeoutException as e:
+            raise LLMProviderError(
+                "anthropic",
+                f"Request to Anthropic timed out after 60s.",
+            ) from e
 
         content = ""
         for block in data.get("content", []):
@@ -148,7 +206,10 @@ class AnthropicProvider(BaseLLMProvider):
                 content += block.get("text", "")
 
         if not content.strip():
-            raise ValueError("Anthropic returned empty content")
+            raise LLMProviderError(
+                "anthropic",
+                f"Model '{self.model}' returned empty content. The model may be misconfigured.",
+            )
 
         return LLMResponse(content=content, model=data.get("model", self.model))
 
@@ -167,7 +228,10 @@ class GeminiProvider(BaseLLMProvider):
         temperature: float = 0.1,
     ) -> LLMResponse:
         if not self.api_key:
-            raise ValueError("Gemini requires an API key. Set LLM_API_KEY in your config.")
+            raise LLMProviderError(
+                "gemini",
+                "Gemini requires an API key. Set ANSWER_LLM_API_KEY in your .env file.",
+            )
 
         headers = {"Content-Type": "application/json"}
 
@@ -192,10 +256,25 @@ class GeminiProvider(BaseLLMProvider):
             f":generateContent?key={self.api_key}"
         )
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(url, json=payload, headers=headers)
-            resp.raise_for_status()
-            data = resp.json()
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                resp = await client.post(url, json=payload, headers=headers)
+                resp.raise_for_status()
+                data = resp.json()
+        except httpx.HTTPStatusError as e:
+            status = e.response.status_code
+            message = self._describe_http_error(status, "Gemini")
+            raise LLMProviderError("gemini", message, status) from e
+        except httpx.ConnectError as e:
+            raise LLMProviderError(
+                "gemini",
+                f"Cannot connect to {self.base_url}. Check ANSWER_LLM_BASE_URL.",
+            ) from e
+        except httpx.TimeoutException as e:
+            raise LLMProviderError(
+                "gemini",
+                f"Request to Gemini timed out after 60s.",
+            ) from e
 
         content = ""
         for candidate in data.get("candidates", []):
@@ -204,7 +283,21 @@ class GeminiProvider(BaseLLMProvider):
                     content += part["text"]
 
         if not content.strip():
-            raise ValueError("Gemini returned empty content")
+            # Gemini may return safety blocks instead of content
+            block_reason = None
+            for candidate in data.get("candidates", []):
+                if "finishReason" in candidate:
+                    block_reason = candidate["finishReason"]
+            if block_reason:
+                raise LLMProviderError(
+                    "gemini",
+                    f"Model '{self.model}' did not generate content (finishReason: {block_reason}). "
+                    f"This may be due to safety filters. Try rephrasing your query.",
+                )
+            raise LLMProviderError(
+                "gemini",
+                f"Model '{self.model}' returned empty content.",
+            )
 
         return LLMResponse(content=content, model=self.model)
 
