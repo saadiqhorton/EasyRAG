@@ -7,8 +7,9 @@ from dataclasses import dataclass
 from qdrant_client import models
 
 from .config import QDRANT_COLLECTION_NAME, get_settings
-from .qdrant_client import get_qdrant_client
+from .qdrant_client import DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME, get_qdrant_client
 from .query_normalizer import QueryContext
+from .sparse_vector import text_to_sparse_vector
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,61 @@ class RetrievalCandidate:
     version_status: str
 
 
+def _build_retrieval_filter(
+    collection_id: uuid.UUID,
+    filters: dict | None = None,
+) -> models.Filter:
+    """Build a Qdrant filter from collection ID and optional search filters.
+
+    Always filters by collection_id and version_status=active.
+    Optionally applies modality, section_path_prefix, and page range filters.
+    """
+    must_conditions = [
+        models.FieldCondition(
+            key="collection_id",
+            match=models.MatchValue(value=str(collection_id)),
+        ),
+        models.FieldCondition(
+            key="version_status",
+            match=models.MatchValue(value="active"),
+        ),
+    ]
+
+    if filters:
+        if filters.get("modality"):
+            must_conditions.append(
+                models.FieldCondition(
+                    key="modality",
+                    match=models.MatchValue(value=filters["modality"]),
+                )
+            )
+        if filters.get("section_path_prefix"):
+            must_conditions.append(
+                models.FieldCondition(
+                    key="section_path",
+                    match=models.MatchValue(
+                        value=filters["section_path_prefix"],
+                    ),
+                )
+            )
+        if filters.get("page_number_min") is not None:
+            must_conditions.append(
+                models.FieldCondition(
+                    key="page_number",
+                    range=models.Range(gte=filters["page_number_min"]),
+                )
+            )
+        if filters.get("page_number_max") is not None:
+            must_conditions.append(
+                models.FieldCondition(
+                    key="page_number",
+                    range=models.Range(lte=filters["page_number_max"]),
+                )
+            )
+
+    return models.Filter(must=must_conditions)
+
+
 async def hybrid_search(
     query: QueryContext,
     top_k: int = 20,
@@ -50,37 +106,32 @@ async def hybrid_search(
     settings = get_settings()
     client = await get_qdrant_client()
 
-    # Build collection filter
-    collection_filter = models.Filter(
-        must=[
-            models.FieldCondition(
-                key="collection_id",
-                match=models.MatchValue(value=str(query.collection_id)),
-            ),
-            models.FieldCondition(
-                key="version_status",
-                match=models.MatchValue(value="active"),
-            ),
-        ]
-    )
+    # Build filter from collection ID and any search filters
+    collection_filter = _build_retrieval_filter(query.collection_id, query.filters)
 
     try:
         from .embedder import embed_texts
 
         query_vector = embed_texts([query.normalized_query])[0]
 
+        # Compute BM25 sparse vector from query text
+        query_sparse = text_to_sparse_vector(query.normalized_query)
+
         results = await client.query_points(
             collection_name=QDRANT_COLLECTION_NAME,
             prefetch=[
                 models.Prefetch(
                     query=query_vector,
-                    using="dense",
+                    using=DENSE_VECTOR_NAME,
                     limit=top_k * 2,
                     filter=collection_filter,
                 ),
                 models.Prefetch(
-                    query=query.normalized_query,
-                    using="sparse",
+                    query=models.SparseVector(
+                        indices=query_sparse["indices"],
+                        values=query_sparse["values"],
+                    ),
+                    using=SPARSE_VECTOR_NAME,
                     limit=top_k * 2,
                     filter=collection_filter,
                 ),
@@ -115,8 +166,8 @@ async def hybrid_search(
         )
 
     logger.info(
-        "hybrid_search query=%s candidates=%d",
-        query.raw_query[:50], len(candidates),
+        "hybrid_search query=%s candidates=%d filters=%s",
+        query.raw_query[:50], len(candidates), list(query.filters.keys()) if query.filters else [],
     )
     return candidates
 

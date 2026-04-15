@@ -7,7 +7,8 @@ from datetime import UTC, datetime
 from qdrant_client import models
 
 from .config import QDRANT_COLLECTION_NAME, get_settings
-from .qdrant_client import get_qdrant_client
+from .qdrant_client import DENSE_VECTOR_NAME, SPARSE_VECTOR_NAME, get_qdrant_client
+from .sparse_vector import texts_to_sparse_vectors
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +58,22 @@ async def upsert_chunks(
 
     Returns:
         Number of points upserted.
+
+    Raises:
+        ValueError: If embedding dimensions don't match configured dimensions.
     """
+    settings = get_settings()
+
+    # Validate embedding dimensions
+    if dense_vectors:
+        actual_dim = len(dense_vectors[0])
+        if actual_dim != settings.embedding_dimensions:
+            raise ValueError(
+                f"Embedding dimension mismatch: got {actual_dim}, "
+                f"expected {settings.embedding_dimensions}. "
+                f"Check that the embedding model matches the collection config."
+            )
+
     client = await get_qdrant_client()
     upserted = 0
 
@@ -66,7 +82,11 @@ async def upsert_chunks(
         batch_vectors = dense_vectors[i : i + BATCH_SIZE]
 
         points = []
-        for chunk, vector in zip(batch_chunks, batch_vectors):
+        # Generate BM25 sparse vectors for batch text content
+        batch_texts = [chunk["text_content"] for chunk in batch_chunks]
+        batch_sparse = texts_to_sparse_vectors(batch_texts)
+
+        for chunk, vector, sparse in zip(batch_chunks, batch_vectors, batch_sparse):
             point_id = str(chunk["id"])
             payload = _build_payload(
                 chunk_id=chunk["id"],
@@ -85,7 +105,13 @@ async def upsert_chunks(
             points.append(
                 models.PointStruct(
                     id=point_id,
-                    vector={"dense": vector},
+                    vector={
+                        DENSE_VECTOR_NAME: vector,
+                        SPARSE_VECTOR_NAME: models.SparseVector(
+                            indices=sparse["indices"],
+                            values=sparse["values"],
+                        ),
+                    },
                     payload=payload,
                 )
             )

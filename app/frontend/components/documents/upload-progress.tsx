@@ -25,36 +25,92 @@ interface UploadProgressProps {
   onRemove: (index: number) => void;
 }
 
+/** Format elapsed seconds into human-readable duration */
+function formatElapsed(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
+  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m`;
+}
+
 /** Map job status to a progress stage label and percentage */
 function jobToProgress(job: IngestionJob): {
   stage: string;
   percent: number;
   isComplete: boolean;
   isFailed: boolean;
+  chunkText: string | null;
+  elapsedText: string | null;
 } {
+  // Use real progress from backend if available, otherwise fall back to stage-based estimation
+  const percent =
+    job.progress_percent !== null && job.progress_percent !== undefined
+      ? job.progress_percent
+      : estimatePercentFromStatus(job.status);
+
+  const chunkText =
+    job.chunks_processed !== null &&
+    job.chunks_total !== null &&
+    job.chunks_total > 0
+      ? `${job.chunks_processed} / ${job.chunks_total} chunks`
+      : null;
+
+  const elapsedText =
+    job.elapsed_seconds !== null && job.elapsed_seconds !== undefined
+      ? formatElapsed(job.elapsed_seconds)
+      : null;
+
   switch (job.status) {
-    case "queued":
-      return { stage: "Queued", percent: 10, isComplete: false, isFailed: false };
-    case "parsing":
-      return { stage: "Parsing", percent: 30, isComplete: false, isFailed: false };
-    case "chunking":
-      return { stage: "Chunking", percent: 50, isComplete: false, isFailed: false };
-    case "embedding":
-      return { stage: "Embedding", percent: 70, isComplete: false, isFailed: false };
-    case "indexing":
-      return { stage: "Indexing", percent: 90, isComplete: false, isFailed: false };
     case "succeeded":
-      return { stage: "Complete", percent: 100, isComplete: true, isFailed: false };
+      return {
+        stage: "Complete",
+        percent: 100,
+        isComplete: true,
+        isFailed: false,
+        chunkText,
+        elapsedText,
+      };
     case "failed":
       return {
-        stage: job.failure_events?.[0]?.stage_name ?? "Failed",
+        stage: job.failures?.[0]?.stage_name ?? "Failed",
         percent: 0,
         isComplete: true,
         isFailed: true,
+        chunkText,
+        elapsedText,
       };
     default:
-      return { stage: "Unknown", percent: 0, isComplete: false, isFailed: false };
+      return {
+        stage: capitalizeFirst(job.status),
+        percent,
+        isComplete: false,
+        isFailed: false,
+        chunkText,
+        elapsedText,
+      };
   }
+}
+
+/** Estimate progress percentage based on job status (fallback) */
+function estimatePercentFromStatus(status: IngestionJob["status"]): number {
+  switch (status) {
+    case "queued":
+      return 5;
+    case "parsing":
+      return 20;
+    case "chunking":
+      return 40;
+    case "embedding":
+      return 70;
+    case "indexing":
+      return 90;
+    default:
+      return 0;
+  }
+}
+
+/** Capitalize first letter of a string */
+function capitalizeFirst(str: string): string {
+  return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
 function UploadItemRow({
@@ -113,8 +169,31 @@ function UploadItemRow({
                 />
               </div>
               <span className="text-xs text-muted-foreground shrink-0">
-                {progress.isFailed ? "Failed" : progress.stage}
+                {progress.isFailed ? "Failed" : `${progress.percent}%`}
               </span>
+            </div>
+
+            {/* Progress details: stage, chunks, elapsed time */}
+            <div className="flex items-center gap-2 mt-1">
+              <span className="text-xs text-muted-foreground">
+                {progress.stage}
+              </span>
+              {progress.chunkText && (
+                <>
+                  <span className="text-xs text-muted-foreground">•</span>
+                  <span className="text-xs text-muted-foreground">
+                    {progress.chunkText}
+                  </span>
+                </>
+              )}
+              {progress.elapsedText && (
+                <>
+                  <span className="text-xs text-muted-foreground">•</span>
+                  <span className="text-xs text-muted-foreground">
+                    {progress.elapsedText}
+                  </span>
+                </>
+              )}
             </div>
 
             {failureMessage && (

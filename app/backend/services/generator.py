@@ -253,7 +253,9 @@ async def generate_answer(
 def _is_valid_uuid(value: str) -> bool:
     """Check if a string is a valid UUID."""
     try:
+        if value is None:
+            return False
         uuid.UUID(value)
         return True
-    except (ValueError, AttributeError):
+    except (ValueError, AttributeError, TypeError):
         return False

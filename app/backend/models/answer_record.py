@@ -30,6 +30,9 @@ class AnswerRecord(Base):
     raw_candidate_scores_json: Mapped[str | None] = mapped_column(
         Text, nullable=True
     )
+    evidence_json: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
     reranker_used: Mapped[bool] = mapped_column(Boolean, nullable=False)
     llm_model: Mapped[str] = mapped_column(String(100), nullable=False)
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)

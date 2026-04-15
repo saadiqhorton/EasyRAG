@@ -101,8 +101,10 @@ export function EvidenceInspector({ item, onClose }: EvidenceInspectorProps) {
       {/* Link to original document */}
       <div className="pt-2">
         <a
-          href={`/collections/${item.document_id}`}
+          href={`/documents/${item.document_id}`}
           className="text-sm text-primary hover:underline"
+          target="_blank"
+          rel="noopener noreferrer"
         >
           View original document
         </a>

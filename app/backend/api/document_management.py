@@ -6,27 +6,22 @@ import uuid
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models import DocumentVersion, IngestionJob, SourceDocument
+from ..models.chunk import Chunk
+from ..models.derived_asset import DerivedAsset
 from ..models.schemas import DocumentUploadResponse
+from ..services.auth import require_auth
 from ..services.config import Settings, get_settings
+from ..services.constants import ALLOWED_MIME_TYPES
 from ..services.database import get_session
 from ..services.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-ALLOWED_MIME_TYPES = {
-    "text/markdown",
-    "text/x-markdown",
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "text/plain",
-    "text/html",
-}
 
 
 def _compute_hash(content: bytes) -> str:
@@ -54,6 +49,7 @@ async def replace_document(
     file: UploadFile,
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
+    api_key: str = require_auth,
 ) -> DocumentUploadResponse:
     """Replace a document by creating a new version.
 
@@ -71,6 +67,19 @@ async def replace_document(
     max_bytes = settings.max_upload_size_mb * 1024 * 1024
     if len(content) > max_bytes:
         raise HTTPException(status_code=413, detail="File too large")
+
+    # Validate file content matches claimed MIME type (magic bytes)
+    from ..services.file_validation import validate_file_signature
+    is_valid, validation_reason = validate_file_signature(content, mime_type)
+    if not is_valid:
+        logger.warning(
+            "file_signature_mismatch mime=%s reason=%s",
+            mime_type, validation_reason,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"File content does not match claimed type: {validation_reason}",
+        )
 
     # Get existing document
     stmt = select(SourceDocument).where(
@@ -155,6 +164,7 @@ async def replace_document(
 async def delete_document(
     document_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
+    api_key: str = require_auth,
 ) -> dict:
     """Soft-delete a document and remove its Qdrant points."""
     stmt = select(SourceDocument).where(
@@ -167,6 +177,25 @@ async def delete_document(
         raise HTTPException(status_code=404, detail="Document not found")
 
     document.deleted_at = datetime.now(UTC)
+    await session.flush()
+
+    # Clean up chunks and derived assets from PostgreSQL for all versions
+    version_ids_stmt = select(DocumentVersion.id).where(
+        DocumentVersion.document_id == document_id
+    )
+    version_result = await session.execute(version_ids_stmt)
+    version_ids = [row[0] for row in version_result.fetchall()]
+
+    if version_ids:
+        # Delete chunks for all versions of this document
+        await session.execute(
+            delete(Chunk).where(Chunk.version_id.in_(version_ids))
+        )
+        # Delete derived assets for all versions
+        await session.execute(
+            delete(DerivedAsset).where(DerivedAsset.version_id.in_(version_ids))
+        )
+
     await session.flush()
 
     await _delete_qdrant_document_points(document_id, document.collection_id)

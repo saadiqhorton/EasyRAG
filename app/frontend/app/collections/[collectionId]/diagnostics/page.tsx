@@ -2,6 +2,7 @@ import { listFailures, reindexCollection } from "@/lib/api-client";
 import { FailureList } from "@/components/diagnostics/failure-list";
 import { Button } from "@/components/ui/button";
 import { RotateCcw, AlertTriangle } from "lucide-react";
+import type { FailureEvent } from "@/lib/types";
 
 export default async function DiagnosticsPage({
   params,
@@ -10,7 +11,7 @@ export default async function DiagnosticsPage({
 }) {
   const { collectionId } = await params;
 
-  let failures = [];
+  let failures: FailureEvent[] = [];
   let error: string | null = null;
 
   try {

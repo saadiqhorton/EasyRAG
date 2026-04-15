@@ -1,8 +1,9 @@
 import { listCollections } from "@/lib/api-client";
 import { CollectionsClient } from "./collections-client";
+import type { Collection } from "@/lib/types";
 
 export default async function CollectionsPage() {
-  let collections = [];
+  let collections: Collection[] = [];
   let error: string | null = null;
 
   try {

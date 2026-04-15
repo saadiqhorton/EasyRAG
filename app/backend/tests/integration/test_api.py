@@ -191,7 +191,7 @@ async def test_upload_document(client: AsyncClient) -> None:
     assert "job_id" in body
     assert body["title"] == "notes.txt"
     assert body["mime_type"] == "text/plain"
-    assert body["file_size_bytes"] == 24  # len(b"Hello integration test")
+    assert body["file_size_bytes"] == 22  # len(b"Hello integration test")
 
 
 async def test_upload_document_markdown(client: AsyncClient) -> None:

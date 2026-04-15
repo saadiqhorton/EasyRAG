@@ -15,6 +15,7 @@ from ..models.schemas import (
     CollectionResponse,
     FailureEventResponse,
 )
+from ..services.auth import require_auth
 from ..services.database import get_session
 
 logger = logging.getLogger(__name__)
@@ -60,6 +61,7 @@ async def _get_status_summary(
 async def create_collection(
     body: CollectionCreate,
     session: AsyncSession = Depends(get_session),
+    api_key: str = require_auth,
 ) -> CollectionResponse:
     """Create a new knowledge collection."""
     try:
@@ -143,6 +145,7 @@ async def get_collection(
 async def delete_collection(
     collection_id: uuid.UUID,
     session: AsyncSession = Depends(get_session),
+    api_key: str = require_auth,
 ) -> dict:
     """Delete a collection and all its documents, versions, and chunks.
 

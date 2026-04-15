@@ -1,7 +1,10 @@
 """Pydantic request/response schemas for the API layer."""
 
+from __future__ import annotations
+
 import uuid
 from datetime import datetime
+from typing import Optional
 
 from pydantic import BaseModel, Field
 
@@ -37,13 +40,13 @@ class CollectionDetailResponse(BaseModel):
 
     id: uuid.UUID
     name: str
-    description: str | None
+    description: Optional[str] = None
     created_at: datetime
     updated_at: datetime
     document_count: int = 0
     index_status_summary: dict[str, int] = Field(default_factory=dict)
     recent_failures: list["FailureEventResponse"] = Field(default_factory=list)
-    health: "CollectionHealthResponse" | None = None
+    health: Optional["CollectionHealthResponse"] = None
 
     model_config = {"from_attributes": True}
 
@@ -144,17 +147,23 @@ class DocumentListResponse(BaseModel):
 
 
 class IngestionJobResponse(BaseModel):
-    """Response for an ingestion job status query."""
+    """Response for an ingestion job status query with progress tracking."""
 
     id: uuid.UUID
     collection_id: uuid.UUID
     version_id: uuid.UUID
     status: str
     current_stage: str | None = None
+    retry_count: int = 0
     started_at: datetime | None = None
     completed_at: datetime | None = None
     created_at: datetime
     failures: list["FailureEventResponse"] = Field(default_factory=list)
+    # Progress tracking fields
+    chunks_total: int | None = None
+    chunks_processed: int | None = None
+    progress_percent: int | None = Field(None, ge=0, le=100)
+    elapsed_seconds: int | None = None
 
     model_config = {"from_attributes": True}
 

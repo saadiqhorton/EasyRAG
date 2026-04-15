@@ -1,0 +1,49 @@
+[Unit]
+Description=RAG Knowledge Base Ingestion Worker
+Documentation=https://github.com/your-org/rag-kb-project
+After=network.target postgresql.service qdrant.service
+Wants=postgresql.service qdrant.service
+
+[Service]
+Type=simple
+User=ragkb
+Group=ragkb
+WorkingDirectory=/opt/ragkb
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONPATH=/opt/ragkb/app
+Environment=STORAGE_PATH=/var/lib/ragkb/storage
+Environment=LOG_LEVEL=INFO
+
+# Load environment from file
+EnvironmentFile=-/opt/ragkb/.env
+
+# Exec
+ExecStart=/opt/ragkb/venv/bin/python -m app.backend.workers.ingestion_worker
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Resource limits (higher for embedding model)
+LimitNOFILE=65535
+MemoryMax=4G
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ragkb/storage /tmp /opt/ragkb/logs
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ragkb-worker
+
+[Install]
+WantedBy=multi-user.target

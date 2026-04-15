@@ -1,5 +1,6 @@
 """Model-agnostic embedding adapter with sentence-transformers default."""
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from typing import Any
@@ -43,7 +44,7 @@ class SentenceTransformerProvider(EmbeddingProvider):
             logger.error("embedding_model_load_failed model=%s error=%s", model_name, e)
             raise
 
-        self._dimension = self._model.get_sentence_embedding_dimension()
+        self._dimension = self._model.get_embedding_dimension()
         logger.info("embedding_model_loaded name=%s dim=%d", model_name, self._dimension)
 
     def embed_texts(self, texts: list[str]) -> list[list[float]]:
@@ -78,6 +79,20 @@ def get_embedding_provider(model_name: str | None = None) -> EmbeddingProvider:
 
 
 def embed_texts(texts: list[str], model_name: str | None = None) -> list[list[float]]:
-    """Convenience function to embed texts using the default provider."""
+    """Convenience function to embed texts using the default provider.
+
+    This is a synchronous call that runs the embedding model.
+    For use in async contexts, use embed_texts_async() instead.
+    """
     provider = get_embedding_provider(model_name)
     return provider.embed_texts(texts)
+
+
+async def embed_texts_async(texts: list[str], model_name: str | None = None) -> list[list[float]]:
+    """Async wrapper for embed_texts that runs in a thread pool.
+
+    Use this in async contexts (like the ingestion worker) to avoid
+    blocking the event loop during embedding generation.
+    """
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, embed_texts, texts, model_name)

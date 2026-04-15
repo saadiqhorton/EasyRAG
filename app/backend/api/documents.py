@@ -17,21 +17,14 @@ from ..models.schemas import (
     DocumentVersionResponse,
 )
 from ..services.config import Settings, get_settings
+from ..services.constants import ALLOWED_MIME_TYPES
 from ..services.database import get_session
+from ..services.auth import require_auth
 from ..services.storage import get_storage
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
-
-ALLOWED_MIME_TYPES = {
-    "text/markdown",
-    "text/x-markdown",
-    "application/pdf",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-    "text/plain",
-    "text/html",
-}
 
 
 def _compute_hash(content: bytes) -> str:
@@ -59,6 +52,7 @@ async def upload_document(
     file: UploadFile,
     session: AsyncSession = Depends(get_session),
     settings: Settings = Depends(get_settings),
+    api_key: str = require_auth,
 ) -> DocumentUploadResponse:
     """Upload a document to a collection.
 
@@ -82,6 +76,19 @@ async def upload_document(
             status_code=413,
             detail=f"File too large: {len(content)} bytes. "
             f"Maximum: {max_bytes} bytes ({settings.max_upload_size_mb}MB).",
+        )
+
+    # Validate file content matches claimed MIME type (magic bytes)
+    from ..services.file_validation import validate_file_signature
+    is_valid, validation_reason = validate_file_signature(content, mime_type)
+    if not is_valid:
+        logger.warning(
+            "file_signature_mismatch mime=%s reason=%s",
+            mime_type, validation_reason,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail=f"File content does not match claimed type: {validation_reason}",
         )
 
     # Verify collection exists

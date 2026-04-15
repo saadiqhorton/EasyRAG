@@ -8,6 +8,10 @@ from .config import QDRANT_COLLECTION_NAME, get_settings
 
 logger = logging.getLogger(__name__)
 
+# Named vectors: dense vector is "dense", sparse BM25 vector is "sparse"
+DENSE_VECTOR_NAME = "dense"
+SPARSE_VECTOR_NAME = "sparse"
+
 _client: AsyncQdrantClient | None = None
 
 
@@ -26,8 +30,9 @@ async def get_qdrant_client() -> AsyncQdrantClient:
 async def ensure_collection() -> None:
     """Create the Qdrant collection if it does not exist, with indexes.
 
-    Creates the global `rag_kb_chunks` collection with named dense and
-    sparse vectors, and payload indexes on collection_id and version_status.
+    Creates the global ``rag_kb_chunks`` collection with named dense and
+    sparse vectors, and payload indexes on collection_id, document_id,
+    version_id, and version_status.
     """
     settings = get_settings()
     client = await get_qdrant_client()
@@ -37,13 +42,15 @@ async def ensure_collection() -> None:
     if QDRANT_COLLECTION_NAME not in names:
         await client.create_collection(
             collection_name=QDRANT_COLLECTION_NAME,
-            vectors_config=models.VectorParams(
-                size=settings.embedding_dimensions,
-                distance=models.Distance.COSINE,
-            ),
+            vectors_config={
+                DENSE_VECTOR_NAME: models.VectorParams(
+                    size=settings.embedding_dimensions,
+                    distance=models.Distance.COSINE,
+                ),
+            },
             sparse_vectors_config={
-                "sparse": models.SparseVectorParams(
-                    index=models.SparseIndexParams(on=True),
+                SPARSE_VECTOR_NAME: models.SparseVectorParams(
+                    index=models.SparseIndexParams(on_disk=False),
                     modifier=models.Modifier.IDF,
                 ),
             },

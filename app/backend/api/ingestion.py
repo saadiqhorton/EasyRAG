@@ -19,6 +19,7 @@ from ..models.schemas import (
     ReindexRequest,
     ReindexResponse,
 )
+from ..services.auth import require_auth
 from ..services.database import get_session
 
 logger = logging.getLogger(__name__)
@@ -53,16 +54,37 @@ async def get_ingestion_job(
         for f in job.failure_events
     ]
 
+    # Calculate progress fields
+    progress_percent = None
+    elapsed_seconds = None
+
+    if job.chunks_total and job.chunks_total > 0:
+        if job.status in ("succeeded", "failed", "dead_letter"):
+            progress_percent = 100
+        elif job.chunks_processed is not None:
+            progress_percent = min(100, int((job.chunks_processed / job.chunks_total) * 100))
+    elif job.status == "succeeded":
+        progress_percent = 100
+
+    if job.started_at:
+        elapsed = datetime.now(timezone.utc) - job.started_at
+        elapsed_seconds = int(elapsed.total_seconds())
+
     return IngestionJobResponse(
         id=job.id,
         collection_id=job.collection_id,
         version_id=job.version_id,
         status=job.status,
         current_stage=job.current_stage,
+        retry_count=job.retry_count,
         started_at=job.started_at,
         completed_at=job.completed_at,
         created_at=job.created_at,
         failures=failures,
+        chunks_total=job.chunks_total,
+        chunks_processed=job.chunks_processed,
+        progress_percent=progress_percent,
+        elapsed_seconds=elapsed_seconds,
     )
 
 
@@ -111,6 +133,7 @@ async def reindex_collection(
     collection_id: uuid.UUID,
     body: ReindexRequest | None = None,
     session: AsyncSession = Depends(get_session),
+    api_key: str = require_auth,
 ) -> ReindexResponse:
     """Reindex documents in a collection.
 
@@ -134,7 +157,12 @@ async def _reindex_single_document(
     collection_id: uuid.UUID,
     document_id: uuid.UUID,
 ) -> int:
-    """Create a new ingestion job for a single document."""
+    """Create a new ingestion job for a single document.
+
+    Increments the retry_count from the most recent failed/dead_letter job
+    for this version, so that the dead-letter cap is respected across
+    reindex attempts.
+    """
     doc_stmt = select(SourceDocument).where(
         SourceDocument.id == document_id,
         SourceDocument.collection_id == collection_id,
@@ -154,14 +182,34 @@ async def _reindex_single_document(
     if active_version is None:
         raise HTTPException(status_code=404, detail="No active version found")
 
+    # Find the most recent job for this version to carry over retry_count
+    last_job_stmt = (
+        select(IngestionJob)
+        .where(IngestionJob.version_id == active_version.id)
+        .order_by(IngestionJob.created_at.desc())
+        .limit(1)
+    )
+    last_job_result = await session.execute(last_job_stmt)
+    last_job = last_job_result.scalars().first()
+    prior_retries = last_job.retry_count if last_job else 0
+
+    # Check if this version has exceeded max retries (dead_letter)
+    if prior_retries >= 3:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Document has exceeded max retries ({prior_retries}). "
+                   f"Delete and re-upload to retry.",
+        )
+
     # Reset version status
     active_version.index_status = "pending"
 
-    # Create new ingestion job
+    # Create new ingestion job, carrying over retry history
     job = IngestionJob(
         collection_id=collection_id,
         version_id=active_version.id,
         status="queued",
+        retry_count=prior_retries,
     )
     session.add(job)
     await session.flush()
@@ -172,7 +220,10 @@ async def _reindex_failed_documents(
     session: AsyncSession,
     collection_id: uuid.UUID,
 ) -> int:
-    """Create ingestion jobs for all failed document versions."""
+    """Create ingestion jobs for all failed document versions.
+
+    Skips versions that are in dead_letter state (exceeded max retries).
+    """
     stmt = select(DocumentVersion).join(SourceDocument).where(
         SourceDocument.collection_id == collection_id,
         SourceDocument.deleted_at.is_(None),
@@ -184,11 +235,38 @@ async def _reindex_failed_documents(
 
     queued = 0
     for version in failed_versions:
+        # Check if this version already has a dead_letter job
+        dead_letter_stmt = (
+            select(IngestionJob)
+            .where(
+                IngestionJob.version_id == version.id,
+                IngestionJob.status == "dead_letter",
+            )
+        )
+        dl_result = await session.execute(dead_letter_stmt)
+        if dl_result.scalars().first() is not None:
+            continue  # Skip dead_letter versions
+
+        # Find prior retry count
+        last_job_stmt = (
+            select(IngestionJob)
+            .where(IngestionJob.version_id == version.id)
+            .order_by(IngestionJob.created_at.desc())
+            .limit(1)
+        )
+        last_job_result = await session.execute(last_job_stmt)
+        last_job = last_job_result.scalars().first()
+        prior_retries = last_job.retry_count if last_job else 0
+
+        if prior_retries >= 3:
+            continue  # Already exceeded max retries
+
         version.index_status = "pending"
         job = IngestionJob(
             collection_id=collection_id,
             version_id=version.id,
             status="queued",
+            retry_count=prior_retries,
         )
         session.add(job)
         queued += 1

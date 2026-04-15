@@ -119,7 +119,7 @@ Uploads a new version of a document. Old versions are kept but marked as superse
 
 ### Delete Document - DELETE /documents/{document_id}
 
-Soft-deletes a document and removes its indexed data.
+Soft-deletes a document and removes its indexed data. Also cleans up all PostgreSQL chunks and derived assets for all versions of the document.
 
 ## Search and Ask
 
@@ -134,10 +134,14 @@ Searches for relevant text chunks without generating an answer.
   "limit": 10,
   "filters": {
     "modality": "text",
-    "section_path_prefix": "Chapter 1"
+    "section_path_prefix": "Chapter 1",
+    "page_number_min": 1,
+    "page_number_max": 20
   }
 }
 ```
+
+**Filter fields are now enforced:** The `modality`, `section_path_prefix`, `page_number_min`, and `page_number_max` filters are applied to the Qdrant query, narrowing retrieval results to matching chunks.
 
 **Response**
 ```json

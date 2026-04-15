@@ -2,6 +2,8 @@
 
 import asyncio
 import logging
+import os
+import tempfile
 import uuid
 from datetime import UTC, datetime
 
@@ -15,12 +17,16 @@ from ..models.failure_event import FailureEvent
 from ..models.ingestion_job import IngestionJob
 from ..services.config import get_settings
 from ..services.database import get_session_factory, init_db
+from ..services.embedder import embed_texts_async
 
 logger = logging.getLogger(__name__)
 
 # Job state machine stages in order
 STAGES = ["parsing", "chunking", "embedding", "indexing"]
-TERMINAL_STATES = ["succeeded", "failed"]
+TERMINAL_STATES = ["succeeded", "failed", "dead_letter"]
+
+# Maximum retries before a job enters dead_letter state
+MAX_RETRIES = 3
 
 
 async def _poll_next_job(session: AsyncSession) -> IngestionJob | None:
@@ -79,13 +85,62 @@ async def _record_failure(
     await session.flush()
 
 
+async def _handle_job_failure(
+    session: AsyncSession,
+    job: IngestionJob,
+    stage_name: str,
+    error_type: str,
+    message: str,
+    is_retryable: bool = True,
+    suggested_action: str | None = None,
+    version: DocumentVersion | None = None,
+    tmp_path: str | None = None,
+) -> None:
+    """Handle a job failure with retry tracking and dead-letter logic.
+
+    Increments retry_count. If the job has been retried too many times
+    or the failure is not retryable, marks it as dead_letter.
+    Otherwise marks as failed so it can be re-queued via reindex.
+    """
+    # Clean up temp file if provided
+    if tmp_path and os.path.exists(tmp_path):
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+
+    # Increment retry count and record failure
+    job.retry_count += 1
+    await _record_failure(
+        session, job.id, job.collection_id,
+        stage_name, error_type, message,
+        is_retryable=is_retryable,
+        suggested_action=suggested_action,
+    )
+
+    # Determine final state: dead_letter if exhausted or non-retryable
+    if not is_retryable or job.retry_count >= MAX_RETRIES:
+        logger.warning(
+            "job_dead_letter job=%s retries=%d stage=%s error_type=%s",
+            job.id, job.retry_count, stage_name, error_type,
+        )
+        await _update_job_status(session, job.id, "dead_letter", stage_name)
+        if version is not None:
+            version.index_status = "failed"
+            await session.flush()
+    else:
+        await _update_job_status(session, job.id, "failed", stage_name)
+        if version is not None:
+            version.index_status = "failed"
+            await session.flush()
+
+
 async def _process_job(job: IngestionJob, session: AsyncSession) -> None:
     """Process a single ingestion job through all stages."""
     from ..models.source_document import SourceDocument
     from ..services.indexer import mark_version_superseded, upsert_chunks
     from ..services.parser import parse_document
     from ..services.chunker import chunk_document
-    from ..services.embedder import embed_texts
     from ..services.storage import get_storage
     from ..services.qdrant_client import ensure_collection
 
@@ -93,24 +148,28 @@ async def _process_job(job: IngestionJob, session: AsyncSession) -> None:
     storage = get_storage(settings.storage_path)
     version = await session.get(DocumentVersion, job.version_id)
     if version is None:
-        await _record_failure(
-            session, job.id, job.collection_id,
-            "parsing", "version_not_found",
-            f"Document version {job.version_id} not found",
+        await _handle_job_failure(
+            session, job,
+            stage_name="parsing",
+            error_type="version_not_found",
+            message=f"Document version {job.version_id} not found",
             is_retryable=False,
         )
-        await _update_job_status(session, job.id, "failed", "parsing")
         return
 
     # Stage 1: Parsing
     await _update_job_status(session, job.id, "parsing", "parsing")
     result = None
+    tmp_path = None
     try:
         file_content = await storage.get(version.storage_key)
-        import tempfile
 
+        # Write to a temp file that the parser can read.
+        # Use delete=False so the file persists for the parser,
+        # then clean it up explicitly after parsing.
+        suffix = _get_suffix(version.storage_key)
         with tempfile.NamedTemporaryFile(
-            suffix=_get_suffix(version.storage_key), delete=False
+            suffix=suffix, delete=False, dir=tempfile.gettempdir()
         ) as tmp:
             tmp.write(file_content)
             tmp_path = tmp.name
@@ -118,9 +177,15 @@ async def _process_job(job: IngestionJob, session: AsyncSession) -> None:
         mime_type = _guess_mime(version.storage_key)
         result = await parse_document(tmp_path, mime_type)
 
-        # Store derived assets
+        # Store derived assets alongside the original file.
+        # storage_key points to the file (e.g. col/doc/ver/file.md),
+        # so derived assets go under col/doc/ver/_derived/ to avoid
+        # trying to create a directory named after the file.
+        storage_dir = "/".join(version.storage_key.split("/")[:-1])
+        derived_prefix = f"{storage_dir}/_derived"
+
         if result.normalized_markdown:
-            md_key = f"{version.storage_key}/normalized.md"
+            md_key = f"{derived_prefix}/normalized.md"
             await storage.save(md_key, result.normalized_markdown.encode())
             md_asset = DerivedAsset(
                 version_id=version.id,
@@ -130,7 +195,7 @@ async def _process_job(job: IngestionJob, session: AsyncSession) -> None:
             session.add(md_asset)
 
         if result.normalized_json:
-            json_key = f"{version.storage_key}/normalized.json"
+            json_key = f"{derived_prefix}/normalized.json"
             await storage.save(json_key, result.normalized_json.encode())
             json_asset = DerivedAsset(
                 version_id=version.id,
@@ -144,13 +209,16 @@ async def _process_job(job: IngestionJob, session: AsyncSession) -> None:
         await session.flush()
     except Exception as e:
         logger.error("parse_failed job=%s error=%s", job.id, e)
-        await _record_failure(
-            session, job.id, job.collection_id,
-            "parsing", "parse_failed",
-            str(e), is_retryable=True,
+        await _handle_job_failure(
+            session, job,
+            stage_name="parsing",
+            error_type="parse_failed",
+            message=str(e),
+            is_retryable=True,
             suggested_action="Check file integrity and format.",
+            version=version,
+            tmp_path=tmp_path,
         )
-        await _update_job_status(session, job.id, "failed", "parsing")
         return
 
     # Stage 2: Chunking
@@ -174,6 +242,11 @@ async def _process_job(job: IngestionJob, session: AsyncSession) -> None:
             title=result.title,
         )
 
+        # Set total chunks for progress tracking
+        job.chunks_total = len(chunks)
+        job.chunks_processed = 0
+        await session.flush()
+
         # Insert chunk records
         for chunk_data in chunks:
             chunk_record = Chunk(
@@ -195,13 +268,16 @@ async def _process_job(job: IngestionJob, session: AsyncSession) -> None:
         await session.flush()
     except Exception as e:
         logger.error("chunk_failed job=%s error=%s", job.id, e)
-        await _record_failure(
-            session, job.id, job.collection_id,
-            "chunking", "chunk_validation_failed",
-            str(e), is_retryable=True,
+        await _handle_job_failure(
+            session, job,
+            stage_name="chunking",
+            error_type="chunk_validation_failed",
+            message=str(e),
+            is_retryable=True,
             suggested_action="Check chunking configuration and document structure.",
+            version=version,
+            tmp_path=tmp_path,
         )
-        await _update_job_status(session, job.id, "failed", "chunking")
         return
 
     # Stage 3: Embedding
@@ -209,16 +285,22 @@ async def _process_job(job: IngestionJob, session: AsyncSession) -> None:
     dense_vectors = []
     try:
         texts = [c.text_content for c in chunks]
-        dense_vectors = embed_texts(texts)
+        dense_vectors = await embed_texts_async(texts)
+        # Update progress: embedding complete = all chunks processed for embedding
+        job.chunks_processed = len(chunks)
+        await session.flush()
     except Exception as e:
         logger.error("embedding_failed job=%s error=%s", job.id, e)
-        await _record_failure(
-            session, job.id, job.collection_id,
-            "embedding", "embedding_failed",
-            str(e), is_retryable=True,
+        await _handle_job_failure(
+            session, job,
+            stage_name="embedding",
+            error_type="embedding_failed",
+            message=str(e),
+            is_retryable=True,
             suggested_action="Check embedding model availability.",
+            version=version,
+            tmp_path=tmp_path,
         )
-        await _update_job_status(session, job.id, "failed", "embedding")
         return
 
     # Stage 4: Indexing
@@ -263,18 +345,25 @@ async def _process_job(job: IngestionJob, session: AsyncSession) -> None:
         await session.flush()
     except Exception as e:
         logger.error("indexing_failed job=%s error=%s", job.id, e)
-        await _record_failure(
-            session, job.id, job.collection_id,
-            "indexing", "indexing_failed",
-            str(e), is_retryable=True,
+        await _handle_job_failure(
+            session, job,
+            stage_name="indexing",
+            error_type="indexing_failed",
+            message=str(e),
+            is_retryable=True,
             suggested_action="Check Qdrant availability and retry.",
+            version=version,
+            tmp_path=tmp_path,
         )
-        await _update_job_status(session, job.id, "failed", "indexing")
-        version.index_status = "failed"
-        await session.flush()
         return
 
     # Success
+    # Clean up temp file after all stages complete
+    if tmp_path and os.path.exists(tmp_path):
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            logger.warning("tmp_cleanup_failed path=%s", tmp_path)
     await _update_job_status(session, job.id, "succeeded")
     logger.info("ingestion_succeeded job=%s chunks=%d", job.id, len(chunks))
 
@@ -306,8 +395,8 @@ async def run_worker() -> None:
     factory = get_session_factory()
 
     logger.info(
-        "ingestion_worker_started poll_interval=%.1fs",
-        settings.worker_poll_interval,
+        "ingestion_worker_started poll_interval=%.1fs max_retries=%d",
+        settings.worker_poll_interval, MAX_RETRIES,
     )
 
     while True:
@@ -317,8 +406,8 @@ async def run_worker() -> None:
                     job = await _poll_next_job(session)
                     if job is not None:
                         logger.info(
-                            "processing job=%s version=%s",
-                            job.id, job.version_id,
+                            "processing job=%s version=%s retry_count=%d",
+                            job.id, job.version_id, job.retry_count,
                         )
                         await _process_job(job, session)
                     else:

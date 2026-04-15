@@ -124,11 +124,13 @@ Recommended core tables:
 - `graph_edges`
 
 ### Qdrant collections
-Suggested structure:
-- one collection per knowledge collection, or
-- one global collection with tenant and collection filters
+Current implementation: one global collection (`rag_kb_chunks`) with named dense and sparse vectors.
+- Dense vector name: `"dense"` (COSINE distance, configurable dimensions)
+- Sparse vector name: `"sparse"` (BM25 with IDF modifier)
 
-Vector record payload should include:
+Payload indexes on: `collection_id`, `document_id`, `version_id`, `version_status`.
+
+Vector record payload includes:
 - collection_id
 - document_id
 - version_id

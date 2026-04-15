@@ -46,6 +46,10 @@ class LocalStorage:
 
         Raises ValueError if the key attempts path traversal (e.g. ../).
         """
+        # Reject keys containing path traversal sequences before resolving
+        if ".." in key.split("/"):
+            raise ValueError(f"Path traversal detected in storage key: {key}")
+
         resolved = (self.base_path / key).resolve()
         if not str(resolved).startswith(str(self.base_path.resolve())):
             raise ValueError(f"Path traversal detected in storage key: {key}")

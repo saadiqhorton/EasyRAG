@@ -1,0 +1,61 @@
+[Unit]
+Description=RAG Knowledge Base API Server
+Documentation=https://github.com/your-org/rag-kb-project
+After=network.target postgresql.service qdrant.service
+Wants=postgresql.service qdrant.service
+
+[Service]
+Type=simple
+User=ragkb
+Group=ragkb
+WorkingDirectory=/opt/ragkb
+
+# Environment
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONPATH=/opt/ragkb/app
+Environment=STORAGE_PATH=/var/lib/ragkb/storage
+Environment=LOG_LEVEL=INFO
+
+# Load environment from file
+EnvironmentFile=-/opt/ragkb/.env
+
+# Exec
+ExecStart=/opt/ragkb/venv/bin/gunicorn \
+    -w 4 \
+    -k uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:8000 \
+    --timeout 120 \
+    --keep-alive 5 \
+    --max-requests 1000 \
+    --max-requests-jitter 50 \
+    --access-logfile - \
+    --error-logfile - \
+    --capture-output \
+    --enable-stdio-inheritance \
+    app.backend.main:app
+
+# Restart policy
+Restart=always
+RestartSec=5
+StartLimitInterval=60s
+StartLimitBurst=3
+
+# Resource limits
+LimitNOFILE=65535
+MemoryMax=2G
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/ragkb/storage /opt/ragkb/logs
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=ragkb-api
+
+[Install]
+WantedBy=multi-user.target

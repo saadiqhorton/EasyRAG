@@ -105,10 +105,16 @@ export interface IngestionJob {
   version_id: string;
   status: IngestionJobStatus;
   current_stage: string | null;
+  retry_count: number;
   started_at: string | null;
   completed_at: string | null;
   created_at: string;
   failures: FailureEvent[];
+  // Progress tracking fields
+  chunks_total: number | null;
+  chunks_processed: number | null;
+  progress_percent: number | null;
+  elapsed_seconds: number | null;
 }
 
 export interface FailureEvent {

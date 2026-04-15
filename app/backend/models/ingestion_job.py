@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String
+from sqlalchemy import ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from .db import Base, UtcDateTime, utcnow
@@ -30,6 +30,15 @@ class IngestionJob(Base):
     )
     current_stage: Mapped[str | None] = mapped_column(
         String(20), nullable=True
+    )
+    retry_count: Mapped[int] = mapped_column(
+        Integer, default=0, nullable=False
+    )
+    chunks_total: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    chunks_processed: Mapped[int | None] = mapped_column(
+        Integer, default=0, nullable=True
     )
     started_at: Mapped[datetime | None] = mapped_column(
         UtcDateTime, nullable=True

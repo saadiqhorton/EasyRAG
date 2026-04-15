@@ -17,7 +17,9 @@ Process the user query into:
 Use hybrid retrieval:
 - dense semantic retrieval
 - lexical or BM25 retrieval
-- optional metadata filtering
+- optional metadata filtering (modality, section_path_prefix, page_number_min, page_number_max)
+
+Metadata filters from the search/ask request are propagated into the Qdrant query filter, ensuring only matching chunks are returned.
 
 Rationale:
 - semantic retrieval handles paraphrase and conceptual similarity
