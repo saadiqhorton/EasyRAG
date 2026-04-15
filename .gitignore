@@ -1,3 +1,4 @@
+# ── Python ──────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
 *$py.class
@@ -6,32 +7,42 @@ dist/
 build/
 .eggs/
 *.egg
-.env
-.env.local
-.env.*.local
-*.local
 .venv/
 venv/
-node_modules/
-.next/
-out/
-data/storage/
-data/qdrant/
-data/postgres/
 *.db
 *.sqlite3
-test.db
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
 htmlcov/
 .coverage
 coverage.xml
-.nyc_output/
 coverage/
+
+# ── Node / Next.js ─────────────────────────────────────────────
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+
+# ── Environment and secrets ─────────────────────────────────────
+.env
+.env.local
+.env.*.local
+*.local
+
+# ── Runtime data (never ship these) ────────────────────────────
+storage/
+data/storage/
+data/qdrant/
+data/postgres/
+.qdrant-initialized
+model_cache/
+*.log
 tmp/
 temp/
-*.log
+
+# ── IDE / OS ───────────────────────────────────────────────────
 .idea/
 .vscode/
 *.swp
@@ -39,6 +50,10 @@ temp/
 *~
 .DS_Store
 Thumbs.db
-*.tsbuildinfo
-.qdrant-initialized
-storage/
+
+# ── Project reports (local only) ───────────────────────────────
+operations-reports/
+beta-test-results/
+ga-launch-reports/
+snapshots/
+staging-data/

@@ -1,90 +1,89 @@
-# RAG Knowledge Base Framework
+# EasyRAG
 
-A system that reads your documents, indexes them for fast search, and gives you answers with source citations.
+Upload your documents, ask questions, get answers with citations.
 
-## What This Project Does
+## Quick Start
 
-This is a knowledge base platform that helps you find answers in your own documents. You upload files (PDFs, Markdown, Word docs, plain text, or HTML). The system reads them, breaks them into searchable pieces, and creates an index. When you ask a question, it finds the most relevant pieces of text and generates an answer. Every answer comes with citations so you can check where the information came from.
-
-The system is honest about what it knows and does not know. If the evidence is weak or missing, it says so instead of making up an answer.
-
-## Getting Started
-
-### Requirements
-
-- Docker and Docker Compose
-- Python 3.11+
-- Node.js 18+
-
-### Installation
-
-1. Clone the repository
-   ```bash
-   cd rag-kb-project
-   ```
-
-2. Set up environment variables
-   ```bash
-   cp app/infra/.env.example app/infra/.env
-   # Edit .env with your values
-   ```
-
-3. Start all services with Docker Compose
-   ```bash
-   cd app/infra
-   docker compose up -d
-   ```
-
-4. The API will be available at http://localhost:8000
-5. The frontend will be available at http://localhost:3000
-
-### Running Without Docker
-
-**Backend:**
 ```bash
-cd app/backend
-pip install -e ".[dev]"
-alembic upgrade head
-uvicorn app.backend.main:app --reload
+curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
 ```
 
-**Frontend:**
+Then open **http://localhost:3000** in your browser.
+
+That's it. The installer checks for Docker, downloads EasyRAG, configures defaults, and starts everything.
+
+## What You Need
+
+- **Docker** — [Install Docker](https://docs.docker.com/get-docker/)
+- **Docker Compose v2** — included with Docker Desktop
+- **An LLM** — EasyRAG needs a language model to answer questions. The easiest option is [Ollama](https://ollama.ai) running locally with `llama3.2`. The installer will prompt for your LLM settings.
+
+## After Install
+
+1. Open http://localhost:3000
+2. Create a collection
+3. Upload documents (PDF, Markdown, Word, text, HTML)
+4. Ask questions — every answer includes source citations
+
+## Useful Commands
+
 ```bash
-cd app/frontend
-npm install
-npm run dev
+# View logs
+docker compose -f app/infra/docker-compose.yml logs -f
+
+# Stop
+docker compose -f app/infra/docker-compose.yml down
+
+# Diagnose issues
+bash doctor.sh
+
+# Uninstall
+bash uninstall.sh
 ```
 
-**Worker:**
+## Troubleshooting
+
+Run the diagnostics script:
+
 ```bash
-cd app/backend
-python -m workers.ingestion_worker
+bash doctor.sh
 ```
 
-## How to Use
+Common issues:
 
-1. **Create a collection** - A collection groups related documents together
-2. **Upload documents** - Drag and drop files into the collection
-3. **Wait for indexing** - The worker processes your files automatically
-4. **Ask questions** - Type a question and get an answer with citations
-5. **Check evidence** - Click on citations to see the source text
+- **Docker not running** — Start Docker Desktop or the Docker daemon
+- **Port in use** — Stop whatever is using port 3000, 8000, 5432, or 6333
+- **LLM not responding** — Make sure Ollama (or your LLM server) is running. For Ollama: `ollama serve`
+- **First build is slow** — Docker builds images on first run. Subsequent starts are fast.
+
+## Install Options
+
+```bash
+# Install to a custom directory
+EASYRAG_DIR=/opt/easyrag curl -fsSL https://raw.githubusercontent.com/sadiqhorton/EasyRAG/main/install.sh | bash
+
+# Re-run to update (pulls latest and restarts)
+curl -fsSL https://raw.githubusercontent.com/sadiqhorton/EasyRAG/main/install.sh | bash
+```
+
+## How It Works
+
+EasyRAG uses **hybrid search** (semantic + keyword) to find the most relevant parts of your documents, then sends them to a language model to generate an answer. If the evidence is weak, it says so instead of making things up.
+
+The stack runs locally in Docker:
+- **Frontend** — Next.js on port 3000
+- **API** — FastAPI on port 8000
+- **Worker** — Background document processing
+- **PostgreSQL** — Metadata and job storage
+- **Qdrant** — Vector search engine
 
 ## Project Structure
 
 ```
 app/
-├── backend/              # Python FastAPI backend
-│   ├── api/              # API endpoints (collections, documents, search)
-│   ├── models/           # Database models and schemas
-│   ├── services/         # Business logic (parsing, chunking, retrieval, generation)
-│   ├── workers/          # Background job processor
-│   ├── prompts/          # LLM prompt templates
-│   └── tests/            # Unit and integration tests
-├── frontend/             # Next.js 15 frontend
-│   ├── app/              # Pages and layouts
-│   ├── components/       # UI components
-│   └── lib/              # API client, types, utilities
-└── infra/                # Docker Compose and environment config
+├── backend/     FastAPI backend (API, worker, models)
+├── frontend/    Next.js frontend
+└── infra/       Docker Compose and environment config
 ```
 
 ## API Reference
@@ -93,42 +92,15 @@ app/
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/collections` | POST | Create a new collection |
-| `/collections` | GET | List all collections |
-| `/collections/{id}` | GET | Get collection details |
-| `/collections/{id}` | DELETE | Delete a collection |
+| `/collections` | POST | Create a collection |
+| `/collections` | GET | List collections |
+| `/collections/{id}` | GET/DELETE | Get or delete a collection |
 | `/collections/{id}/documents` | POST | Upload a document |
-| `/collections/{id}/documents` | GET | List documents in collection |
 | `/collections/{id}/search` | POST | Search for relevant chunks |
 | `/collections/{id}/ask` | POST | Ask a question with generation |
-| `/documents/{id}` | GET | Get document details |
-| `/documents/{id}/replace` | POST | Upload a new version |
-| `/documents/{id}` | DELETE | Delete a document |
-| `/collections/{id}/failures` | GET | View ingestion failures |
-| `/answers/{id}` | GET | Get a past answer |
 | `/health` | GET | Service health check |
 | `/health/ready` | GET | Readiness check (DB + Qdrant) |
 
-## Running Tests
+## License
 
-**Backend:**
-```bash
-cd app/backend
-pip install -e ".[dev]"
-pytest
-```
-
-**Frontend:**
-```bash
-cd app/frontend
-npm install
-npm run test
-```
-
-## Key Design Decisions
-
-- **Hybrid retrieval** uses both semantic search and keyword matching. This finds more relevant results than either method alone.
-- **Grounded answers** only use text from your documents. The system never invents information.
-- **Abstention** means the system refuses to answer when evidence is too weak. This prevents false answers.
-- **Version tracking** keeps history when you replace a document. Old versions are marked as superseded.
-- **Failure visibility** means you can always see what went wrong during document processing.
+MIT
