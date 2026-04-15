@@ -165,3 +165,24 @@ class TestGetSettings:
             assert config_mod._settings is not None
         finally:
             config_mod._settings = original
+    def test_llm_provider_default_is_ollama(self):
+        """Arrange: required vars set, LLM_PROVIDER not set.
+        Act: create Settings.
+        Assert: llm_provider defaults to 'ollama'.
+        """
+        env = _env_dict()
+        with patch.dict(os.environ, env, clear=True):
+            settings = Settings()
+
+        assert settings.llm_provider == "ollama"
+
+    def test_llm_provider_can_be_set(self):
+        """Arrange: set LLM_PROVIDER to openai.
+        Act: create Settings.
+        Assert: llm_provider is 'openai'.
+        """
+        env = _env_dict(LLM_PROVIDER="openai")
+        with patch.dict(os.environ, env, clear=True):
+            settings = Settings()
+
+        assert settings.llm_provider == "openai"

@@ -6,51 +6,103 @@
 curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
 ```
 
+The installer will prompt you to choose an AI provider and enter the required settings.
+
 ## What the installer does
 
 1. Checks that Docker and Docker Compose are installed and running
 2. Checks that required ports (3000, 8000, 5432, 6333) are available
 3. Clones the EasyRAG repo into `~/.easyrag` (or updates if already present)
 4. Creates a `.env` file from the template with a generated database password
-5. Prompts for your LLM base URL and model name (defaults to local Ollama)
+5. Prompts for your AI provider and writes the config
 6. Builds and starts all containers
 7. Waits for health checks and prints the access URL
 
-## Assumptions
+## Provider setup
 
-- You have Docker and Docker Compose v2 installed
-- You have an LLM available (Ollama locally, or a remote API like OpenAI)
-- You are on Linux or macOS
+### Ollama (default, free, local)
 
-## Install options
+1. Install [Ollama](https://ollama.ai)
+2. Run: `ollama pull llama3.2`
+3. During install, select option 1 (Ollama)
+4. Default base URL: `http://host.docker.internal:11434/v1`
 
-```bash
-# Custom install directory
-EASYRAG_DIR=/opt/easyrag curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
-
-# Update an existing install (just re-run the same command)
-curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
+**Required env vars:**
+```
+LLM_PROVIDER=ollama
+ANSWER_LLM_BASE_URL=http://host.docker.internal:11434/v1
+ANSWER_LLM_MODEL=llama3.2
 ```
 
-## LLM configuration
+**Note for Linux users:** Use `http://172.17.0.1:11434/v1` as the base URL instead of `host.docker.internal`, or add the host Docker gateway IP.
 
-EasyRAG needs a language model to generate answers. The default assumes [Ollama](https://ollama.ai) running locally.
+### OpenAI
 
-| LLM Provider | ANSWER_LLM_BASE_URL | ANSWER_LLM_MODEL | ANSWER_LLM_API_KEY |
-|---------------|---------------------|-------------------|--------------------|
-| Ollama (local) | `http://host.docker.internal:11434/v1` | `llama3.2` | (leave empty) |
-| OpenAI | `https://api.openai.com/v1` | `gpt-4o` | `sk-...` |
-| Anthropic | `https://api.anthropic.com/v1` | `claude-sonnet-4-20250514` | Your API key |
+1. Get an API key from [platform.openai.com](https://platform.openai.com)
+2. During install, select option 2 (OpenAI)
+3. Enter your API key when prompted
+
+**Required env vars:**
+```
+LLM_PROVIDER=openai
+ANSWER_LLM_BASE_URL=https://api.openai.com/v1
+ANSWER_LLM_MODEL=gpt-4o
+ANSWER_LLM_API_KEY=sk-...
+```
+
+Popular models: `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`
+
+### Anthropic
+
+1. Get an API key from [console.anthropic.com](https://console.anthropic.com)
+2. During install, select option 3 (Anthropic)
+3. Enter your API key when prompted
+
+**Required env vars:**
+```
+LLM_PROVIDER=anthropic
+ANSWER_LLM_BASE_URL=https://api.anthropic.com
+ANSWER_LLM_MODEL=claude-sonnet-4-20250514
+ANSWER_LLM_API_KEY=sk-ant-...
+```
+
+Popular models: `claude-sonnet-4-20250514`, `claude-haiku-4-20250414`
+
+### Google Gemini
+
+1. Get an API key from [aistudio.google.com](https://aistudio.google.com)
+2. During install, select option 4 (Gemini)
+3. Enter your API key when prompted
+
+**Required env vars:**
+```
+LLM_PROVIDER=gemini
+ANSWER_LLM_BASE_URL=https://generativelanguage.googleapis.com
+ANSWER_LLM_MODEL=gemini-2.0-flash
+ANSWER_LLM_API_KEY=AIza...
+```
+
+Popular models: `gemini-2.0-flash`, `gemini-1.5-pro`
+
+### Custom OpenAI-compatible
+
+For self-hosted models via vLLM, LiteLLM, LocalAI, or any server that exposes an OpenAI-compatible `/chat/completions` endpoint:
+
+**Required env vars:**
+```
+LLM_PROVIDER=openai_compatible
+ANSWER_LLM_BASE_URL=http://your-server:8080/v1
+ANSWER_LLM_MODEL=your-model-name
+ANSWER_LLM_API_KEY=              # optional, leave empty if not needed
+```
 
 ## Diagnostics
-
-If something isn't working:
 
 ```bash
 bash doctor.sh
 ```
 
-This checks Docker, ports, environment, and service health.
+Checks Docker, ports, environment, provider config, and service health.
 
 ## Uninstall
 
@@ -60,13 +112,12 @@ bash uninstall.sh
 
 Stops containers and optionally removes all data.
 
-## Release-based install (future)
-
-The installer currently always pulls from `main`. For release-based installs:
+## Install options
 
 ```bash
-# Install a specific version (future)
-EASYRAG_VERSION=0.2.0 curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
-```
+# Custom install directory
+EASYRAG_DIR=/opt/easyrag curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
 
-The `VERSION` file at the repo root tracks the current release. The installer reads `EASYRAG_VERSION` to optionally pin to a specific tag.
+# Update an existing install (just re-run)
+curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
+```

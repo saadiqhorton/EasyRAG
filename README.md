@@ -8,15 +8,25 @@ Upload your documents, ask questions, get answers with citations.
 curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
 ```
 
-Then open **http://localhost:3000** in your browser.
+The installer walks you through choosing an AI provider, then starts everything.
 
-That's it. The installer checks for Docker, downloads EasyRAG, configures defaults, and starts everything.
+## Supported AI Providers
 
-## What You Need
+| Provider | Requires API Key | Example Models | Notes |
+|----------|-----------------|----------------|-------|
+| **Ollama** | No | llama3.2, mistral | Free, runs locally |
+| **OpenAI** | Yes | gpt-4o, gpt-4o-mini | Best quality |
+| **Anthropic** | Yes | claude-sonnet-4-20250514 | Strong at long documents |
+| **Gemini** | Yes | gemini-2.0-flash | Fast and affordable |
+| **Custom** | Optional | Any OpenAI-compatible | vLLM, LiteLLM, etc. |
+
+During install, you pick a provider and enter only the settings it needs.
+
+## Prerequisites
 
 - **Docker** — [Install Docker](https://docs.docker.com/get-docker/)
 - **Docker Compose v2** — included with Docker Desktop
-- **An LLM** — EasyRAG needs a language model to answer questions. The easiest option is [Ollama](https://ollama.ai) running locally with `llama3.2`. The installer will prompt for your LLM settings.
+- **An AI provider** — pick one during install, or configure manually
 
 ## After Install
 
@@ -24,6 +34,26 @@ That's it. The installer checks for Docker, downloads EasyRAG, configures defaul
 2. Create a collection
 3. Upload documents (PDF, Markdown, Word, text, HTML)
 4. Ask questions — every answer includes source citations
+
+## Switching Providers
+
+Edit `~/.easyrag/.env` and change the provider settings:
+
+```bash
+# Change provider
+LLM_PROVIDER=openai        # ollama | openai | anthropic | gemini | openai_compatible
+
+# Update the corresponding URL, model, and API key
+ANSWER_LLM_BASE_URL=https://api.openai.com/v1
+ANSWER_LLM_MODEL=gpt-4o
+ANSWER_LLM_API_KEY=sk-...
+
+# Then restart
+docker compose -f app/infra/docker-compose.yml down
+docker compose -f app/infra/docker-compose.yml up -d
+```
+
+See [INSTALL.md](INSTALL.md) for detailed setup per provider.
 
 ## Useful Commands
 
@@ -43,8 +73,6 @@ bash uninstall.sh
 
 ## Troubleshooting
 
-Run the diagnostics script:
-
 ```bash
 bash doctor.sh
 ```
@@ -53,18 +81,9 @@ Common issues:
 
 - **Docker not running** — Start Docker Desktop or the Docker daemon
 - **Port in use** — Stop whatever is using port 3000, 8000, 5432, or 6333
-- **LLM not responding** — Make sure Ollama (or your LLM server) is running. For Ollama: `ollama serve`
-- **First build is slow** — Docker builds images on first run. Subsequent starts are fast.
-
-## Install Options
-
-```bash
-# Install to a custom directory
-EASYRAG_DIR=/opt/easyrag curl -fsSL https://raw.githubusercontent.com/sadiqhorton/EasyRAG/main/install.sh | bash
-
-# Re-run to update (pulls latest and restarts)
-curl -fsSL https://raw.githubusercontent.com/sadiqhorton/EasyRAG/main/install.sh | bash
-```
+- **LLM not responding** — For Ollama: `ollama serve`. For others: check your API key and base URL
+- **API key errors** — Run `doctor.sh` to verify your key is set
+- **First build is slow** — Docker builds images on first run
 
 ## How It Works
 
@@ -85,21 +104,6 @@ app/
 ├── frontend/    Next.js frontend
 └── infra/       Docker Compose and environment config
 ```
-
-## API Reference
-
-**Base URL:** `http://localhost:8000/api/v1`
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/collections` | POST | Create a collection |
-| `/collections` | GET | List collections |
-| `/collections/{id}` | GET/DELETE | Get or delete a collection |
-| `/collections/{id}/documents` | POST | Upload a document |
-| `/collections/{id}/search` | POST | Search for relevant chunks |
-| `/collections/{id}/ask` | POST | Ask a question with generation |
-| `/health` | GET | Service health check |
-| `/health/ready` | GET | Readiness check (DB + Qdrant) |
 
 ## License
 

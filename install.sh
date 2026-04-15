@@ -5,14 +5,14 @@
 # ────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-EASYRAG_VERSION="0.1.0"
+EASYRAG_VERSION="0.2.0"
 REPO_URL="https://github.com/saadiqhorton/EasyRAG.git"
 INSTALL_DIR="${EASYRAG_DIR:-$HOME/.easyrag}"
 COMPOSE_FILE="app/infra/docker-compose.yml"
 MAX_WAIT=120
 
 # ── Colors ──────────────────────────────────────────────────────
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; BOLD='\033[1m'; NC='\033[0m'
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
 step()   { printf "${BLUE}▸${NC} %s\n" "$1"; }
 ok()     { printf "${GREEN}✔${NC} %s\n" "$1"; }
@@ -71,35 +71,110 @@ if [ ! -f "${ENV_FILE}" ]; then
 
   # Generate a random postgres password
   GENERATED_PW=$(openssl rand -hex 16 2>/dev/null || head -c 32 /dev/urandom | xxd -p | head -c 32)
-  sed -i.bak "s/^POSTGRES_PASSWORD=changeme$/POSTGRES_PASSWORD=${GENERATED_PW}/" "${ENV_FILE}" && rm -f "${ENV_FILE}.bak"
+  if [ "$(uname)" = "Darwin" ]; then
+    sed -i '' "s/^POSTGRES_PASSWORD=changeme$/POSTGRES_PASSWORD=${GENERATED_PW}/" "${ENV_FILE}"
+  else
+    sed -i "s/^POSTGRES_PASSWORD=changeme$/POSTGRES_PASSWORD=${GENERATED_PW}/" "${ENV_FILE}"
+  fi
   ok "Generated secure POSTGRES_PASSWORD"
 else
   step "Using existing .env"
 fi
 
-# ── Prompt for LLM if needed ────────────────────────────────────
-if grep -q "^ANSWER_LLM_BASE_URL=http://host.docker.internal:11434/v1$" "${ENV_FILE}" 2>/dev/null; then
+# ── Provider selection ───────────────────────────────────────────
+if grep -q "^LLM_PROVIDER=ollama$" "${ENV_FILE}" 2>/dev/null || ! grep -q "^LLM_PROVIDER=" "${ENV_FILE}" 2>/dev/null; then
   echo ""
-  banner "LLM Configuration"
-  echo "EasyRAG needs an LLM to generate answers."
-  echo "If you have Ollama running locally, the defaults work."
+  banner "Choose your AI provider"
+  echo "  ${CYAN}1)${NC} Ollama (local, free, default)"
+  echo "  ${CYAN}2)${NC} OpenAI (GPT-4o, etc.)"
+  echo "  ${CYAN}3)${NC} Anthropic (Claude)"
+  echo "  ${CYAN}4)${NC} Google Gemini"
+  echo "  ${CYAN}5)${NC} Custom OpenAI-compatible endpoint"
   echo ""
 
-  read -r -p "LLM base URL [http://host.docker.internal:11434/v1]: " llm_url < /dev/tty
-  llm_url="${llm_url:-http://host.docker.internal:11434/v1}"
+  read -r -p "Select provider [1-5]: " choice < /dev/tty
 
-  read -r -p "LLM model name [llama3.2]: " llm_model < /dev/tty
-  llm_model="${llm_model:-llama3.2}"
+  case "${choice}" in
+    1|"")
+      # Ollama — default
+      LLM_PROVIDER="ollama"
+      LLM_BASE_URL="http://host.docker.internal:11434/v1"
+      LLM_MODEL="llama3.2"
+      LLM_API_KEY=""
+      echo ""
+      echo "  Ollama selected. Make sure Ollama is running with: ${CYAN}ollama serve${NC}"
+      echo ""
+      read -r -p "Ollama base URL [${LLM_BASE_URL}]: " base_url < /dev/tty
+      LLM_BASE_URL="${base_url:-${LLM_BASE_URL}}"
+      read -r -p "Model name [${LLM_MODEL}]: " model < /dev/tty
+      LLM_MODEL="${model:-${LLM_MODEL}}"
+      ;;
+    2)
+      # OpenAI
+      LLM_PROVIDER="openai"
+      LLM_BASE_URL="https://api.openai.com/v1"
+      LLM_MODEL="gpt-4o"
+      echo ""
+      read -r -p "OpenAI API key: " api_key < /dev/tty
+      LLM_API_KEY="${api_key}"
+      read -r -p "Model [${LLM_MODEL}]: " model < /dev/tty
+      LLM_MODEL="${model:-${LLM_MODEL}}"
+      ;;
+    3)
+      # Anthropic
+      LLM_PROVIDER="anthropic"
+      LLM_BASE_URL="https://api.anthropic.com"
+      LLM_MODEL="claude-sonnet-4-20250514"
+      echo ""
+      read -r -p "Anthropic API key: " api_key < /dev/tty
+      LLM_API_KEY="${api_key}"
+      read -r -p "Model [${LLM_MODEL}]: " model < /dev/tty
+      LLM_MODEL="${model:-${LLM_MODEL}}"
+      ;;
+    4)
+      # Gemini
+      LLM_PROVIDER="gemini"
+      LLM_BASE_URL="https://generativelanguage.googleapis.com"
+      LLM_MODEL="gemini-2.0-flash"
+      echo ""
+      read -r -p "Google AI API key: " api_key < /dev/tty
+      LLM_API_KEY="${api_key}"
+      read -r -p "Model [${LLM_MODEL}]: " model < /dev/tty
+      LLM_MODEL="${model:-${LLM_MODEL}}"
+      ;;
+    5)
+      # OpenAI-compatible custom
+      LLM_PROVIDER="openai_compatible"
+      echo ""
+      read -r -p "Base URL (e.g. http://your-server:8080/v1): " base_url < /dev/tty
+      LLM_BASE_URL="${base_url}"
+      read -r -p "Model name: " model < /dev/tty
+      LLM_MODEL="${model}"
+      read -r -p "API key (leave empty if not needed): " api_key < /dev/tty
+      LLM_API_KEY="${api_key}"
+      ;;
+    *)
+      LLM_PROVIDER="ollama"
+      LLM_BASE_URL="http://host.docker.internal:11434/v1"
+      LLM_MODEL="llama3.2"
+      LLM_API_KEY=""
+      warn "Invalid choice, defaulting to Ollama"
+      ;;
+  esac
 
-  # Update .env
+  # Write provider config to .env
   if [ "$(uname)" = "Darwin" ]; then
-    sed -i '' "s|^ANSWER_LLM_BASE_URL=.*|ANSWER_LLM_BASE_URL=${llm_url}|" "${ENV_FILE}"
-    sed -i '' "s|^ANSWER_LLM_MODEL=.*|ANSWER_LLM_MODEL=${llm_model}|" "${ENV_FILE}"
+    sed -i '' "s|^LLM_PROVIDER=.*|LLM_PROVIDER=${LLM_PROVIDER}|" "${ENV_FILE}"
+    sed -i '' "s|^ANSWER_LLM_BASE_URL=.*|ANSWER_LLM_BASE_URL=${LLM_BASE_URL}|" "${ENV_FILE}"
+    sed -i '' "s|^ANSWER_LLM_MODEL=.*|ANSWER_LLM_MODEL=${LLM_MODEL}|" "${ENV_FILE}"
+    sed -i '' "s|^ANSWER_LLM_API_KEY=.*|ANSWER_LLM_API_KEY=${LLM_API_KEY}|" "${ENV_FILE}"
   else
-    sed -i "s|^ANSWER_LLM_BASE_URL=.*|ANSWER_LLM_BASE_URL=${llm_url}|" "${ENV_FILE}"
-    sed -i "s|^ANSWER_LLM_MODEL=.*|ANSWER_LLM_MODEL=${llm_model}|" "${ENV_FILE}"
+    sed -i "s|^LLM_PROVIDER=.*|LLM_PROVIDER=${LLM_PROVIDER}|" "${ENV_FILE}"
+    sed -i "s|^ANSWER_LLM_BASE_URL=.*|ANSWER_LLM_BASE_URL=${LLM_BASE_URL}|" "${ENV_FILE}"
+    sed -i "s|^ANSWER_LLM_MODEL=.*|ANSWER_LLM_MODEL=${LLM_MODEL}|" "${ENV_FILE}"
+    sed -i "s|^ANSWER_LLM_API_KEY=.*|ANSWER_LLM_API_KEY=${LLM_API_KEY}|" "${ENV_FILE}"
   fi
-  ok "LLM configured: ${llm_model} @ ${llm_url}"
+  ok "Provider configured: ${LLM_PROVIDER} (${LLM_MODEL})"
 fi
 
 # ── Docker Compose up ────────────────────────────────────────────
@@ -147,6 +222,8 @@ echo ""
 echo "  Next steps:"
 echo "    • Create a collection and upload documents"
 echo "    • Ask questions and get cited answers"
+echo ""
+echo "  Provider: ${CYAN}${LLM_PROVIDER:-ollama}${NC}"
 echo ""
 echo "  Useful commands:"
 echo "    View logs:   docker compose -f ${COMPOSE_FILE} logs -f"

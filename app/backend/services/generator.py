@@ -7,10 +7,9 @@ import time
 import uuid
 from dataclasses import dataclass
 
-import httpx
-
 from .config import get_settings
 from .evidence import EvidencePackage
+from .llm_provider import LLMProviderType, create_provider
 from ..models.schemas import Citation, EvidenceItem
 from ..prompts.grounded_answer import (
     ABSTENTION_RESPONSE,
@@ -24,7 +23,6 @@ logger = logging.getLogger(__name__)
 # Retry configuration
 _MAX_RETRIES = 2
 _RETRY_DELAY_SECONDS = 1.0
-_RETRYABLE_STATUS_CODES = {429, 502, 503, 504}
 
 # Answer modes
 ANSWERED_WITH_EVIDENCE = "answered_with_evidence"
@@ -79,77 +77,63 @@ def _determine_mode(evidence: EvidencePackage, score_threshold: float) -> str:
 
 
 async def _call_llm(system_prompt: str, user_prompt: str) -> str:
-    """Call the OpenAI-compatible LLM API with retry.
+    """Call the configured LLM provider with retry.
 
-    Implements: retry with exponential backoff for transient errors,
-    defensive response validation, and graceful error handling.
+    Uses the LLM_PROVIDER setting to route to the correct API format.
+    Implements retry with exponential backoff for transient errors.
     """
     settings = get_settings()
-    headers = {"Content-Type": "application/json"}
-    if settings.answer_llm_api_key:
-        headers["Authorization"] = f"Bearer {settings.answer_llm_api_key}"
 
-    payload = {
-        "model": settings.answer_llm_model,
-        "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        "max_tokens": 1024,
-        "temperature": 0.1,
-    }
+    provider = create_provider(
+        provider_type=settings.llm_provider,
+        base_url=settings.answer_llm_base_url,
+        model=settings.answer_llm_model,
+        api_key=settings.answer_llm_api_key,
+    )
 
-    content = ""
     for attempt in range(1 + _MAX_RETRIES):
         if attempt > 0:
             await asyncio.sleep(_RETRY_DELAY_SECONDS * attempt)
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                resp = await client.post(
-                    f"{settings.answer_llm_base_url}/chat/completions",
-                    json=payload,
-                    headers=headers,
-                )
-                if resp.status_code in _RETRYABLE_STATUS_CODES:
-                    if attempt == _MAX_RETRIES:
-                        resp.raise_for_status()
-                    continue
-                resp.raise_for_status()
+            response = await provider.generate(
+                system_prompt=system_prompt,
+                user_prompt=user_prompt,
+            )
+            return response.content
+        except ValueError as e:
+            # Provider validation errors (e.g., missing API key) are not retryable
+            logger.error("llm_validation_error: %s", e)
+            raise
+        except Exception as e:
+            # Determine if the error is retryable
+            is_retryable = False
+            status_code = getattr(getattr(e, "response", None), "status_code", None)
 
-                data = resp.json()
-                content = (
-                    data.get("choices", [{}])[0]
-                    .get("message", {})
-                    .get("content", "")
-                )
-                break
-        except httpx.HTTPStatusError as e:
-            status = e.response.status_code
-            if status == 429:
-                logger.warning("llm_rate_limited status=%d", status)
-            elif status >= 500:
-                logger.warning("llm_server_error status=%d", status)
+            if status_code is not None:
+                if status_code in {429, 502, 503, 504}:
+                    is_retryable = True
+                    if status_code == 429:
+                        logger.warning("llm_rate_limited status=%d", status_code)
+                    elif status_code >= 500:
+                        logger.warning("llm_server_error status=%d", status_code)
+                elif status_code >= 400:
+                    logger.warning("llm_client_error status=%d", status_code)
+                    raise
             else:
-                logger.warning("llm_client_error status=%d", status)
-            if status in _RETRYABLE_STATUS_CODES and attempt < _MAX_RETRIES:
-                continue
-            raise
-        except httpx.TimeoutException:
-            logger.warning("llm_timeout attempt=%d", attempt)
-            if attempt < _MAX_RETRIES:
-                continue
-            raise
-        except httpx.ConnectError:
-            logger.warning("llm_connect_error attempt=%d", attempt)
-            if attempt < _MAX_RETRIES:
-                continue
-            raise
+                # Connection or timeout errors are retryable
+                err_type = type(e).__name__
+                if "Timeout" in err_type or "Connect" in err_type:
+                    is_retryable = True
+                    logger.warning("llm_%s attempt=%d", err_type.lower(), attempt)
+                else:
+                    logger.warning("llm_error: %s", e)
+                    raise
 
-    if not content.strip():
-        raise ValueError("LLM returned empty content")
+            if not is_retryable or attempt >= _MAX_RETRIES:
+                raise
 
-    return content
+    raise RuntimeError("LLM call failed after retries")
 
 
 async def generate_answer(

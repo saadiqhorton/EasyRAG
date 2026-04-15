@@ -23,15 +23,17 @@ class Settings(BaseSettings):
     # When set, API endpoints require Bearer token authentication
     api_key: str | None = None
 
+    # LLM provider configuration
+    # Supported: ollama, openai, anthropic, gemini, openai_compatible
+    llm_provider: str = "ollama"
+    answer_llm_base_url: str
+    answer_llm_model: str
+    answer_llm_api_key: str | None = None
+
     # Embedding and reranker models
     embedding_model_name: str = "sentence-transformers/all-MiniLM-L6-v2"
     embedding_dimensions: int = 384
     reranker_model_name: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-
-    # Answer generation LLM
-    answer_llm_base_url: str
-    answer_llm_model: str
-    answer_llm_api_key: str | None = None
 
     # Storage and limits
     max_upload_size_mb: int = 50
