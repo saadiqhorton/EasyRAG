@@ -12,13 +12,15 @@ The installer walks you through choosing an AI provider, then starts everything.
 
 ## Supported AI Providers
 
-| Provider | Requires API Key | Example Models | Notes |
-|----------|-----------------|----------------|-------|
-| **Ollama** | No | llama3.2, mistral | Free, runs locally |
-| **OpenAI** | Yes | gpt-4o, gpt-4o-mini | Best quality |
-| **Anthropic** | Yes | claude-sonnet-4-20250514 | Strong at long documents |
-| **Gemini** | Yes | gemini-2.0-flash | Fast and affordable |
-| **Custom** | Optional | Any OpenAI-compatible | vLLM, LiteLLM, etc. |
+| Provider | API Key | Example Models | Verified |
+|----------|---------|----------------|----------|
+| **Ollama** | No | llama3.2, mistral | Code-level |
+| **OpenAI** | Yes | gpt-4o, gpt-4o-mini | Code-level |
+| **Anthropic** | Yes | claude-sonnet-4-20250514 | Code-level |
+| **Gemini** | Yes | gemini-2.0-flash | Code-level |
+| **Custom** | Optional | Any OpenAI-compatible | Code-level |
+
+"Code-level" means the adapter is implemented and tested against the provider's documented API format. Live API calls have not been tested from this build environment. See [INSTALL.md](INSTALL.md) for per-provider setup instructions.
 
 During install, you pick a provider and enter only the settings it needs.
 
@@ -40,10 +42,7 @@ During install, you pick a provider and enter only the settings it needs.
 Edit `~/.easyrag/.env` and change the provider settings:
 
 ```bash
-# Change provider
 LLM_PROVIDER=openai        # ollama | openai | anthropic | gemini | openai_compatible
-
-# Update the corresponding URL, model, and API key
 ANSWER_LLM_BASE_URL=https://api.openai.com/v1
 ANSWER_LLM_MODEL=gpt-4o
 ANSWER_LLM_API_KEY=sk-...
@@ -53,22 +52,13 @@ docker compose -f app/infra/docker-compose.yml down
 docker compose -f app/infra/docker-compose.yml up -d
 ```
 
-See [INSTALL.md](INSTALL.md) for detailed setup per provider.
-
 ## Useful Commands
 
 ```bash
-# View logs
-docker compose -f app/infra/docker-compose.yml logs -f
-
-# Stop
-docker compose -f app/infra/docker-compose.yml down
-
-# Diagnose issues
-bash doctor.sh
-
-# Uninstall
-bash uninstall.sh
+docker compose -f app/infra/docker-compose.yml logs -f   # View logs
+docker compose -f app/infra/docker-compose.yml down      # Stop
+bash doctor.sh                                           # Diagnose issues
+bash uninstall.sh                                        # Uninstall
 ```
 
 ## Troubleshooting
@@ -83,7 +73,7 @@ Common issues:
 - **Port in use** — Stop whatever is using port 3000, 8000, 5432, or 6333
 - **LLM not responding** — For Ollama: `ollama serve`. For others: check your API key and base URL
 - **API key errors** — Run `doctor.sh` to verify your key is set
-- **First build is slow** — Docker builds images on first run
+- **First build is slow** — Docker builds images on first run. Subsequent starts are fast.
 
 ## How It Works
 

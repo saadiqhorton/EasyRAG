@@ -49,3 +49,15 @@ All notable changes to EasyRAG are documented here.
 - `next.config.ts` — added `output: "standalone"` for Docker builds
 - `docker-compose.yml` — `POSTGRES_USER` defaults to `ragkb`
 - README rewritten for new users (not dev setup)
+
+### Provider verification note
+
+All five providers (Ollama, OpenAI, Anthropic, Gemini, Custom) are implemented
+with dedicated adapters following each provider's documented API format. Code-level
+validation includes: factory tests, API key validation, error message mapping (401,
+403, 404, 429), request payload structure verification, and URL construction tests.
+
+Live API calls have not been tested from this build environment due to network
+restrictions. The adapters should work correctly with real API keys. If you encounter
+issues with a specific provider, please file an issue at:
+https://github.com/saadiqhorton/EasyRAG/issues

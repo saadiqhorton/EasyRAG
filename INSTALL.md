@@ -18,6 +18,22 @@ The installer will prompt you to choose an AI provider and enter the required se
 6. Builds and starts all containers
 7. Waits for health checks and prints the access URL
 
+## Provider verification status
+
+All five providers are **supported** with dedicated adapters. The adapters are implemented against each provider's documented API format and tested at the code level (factory, validation, error handling, payload structure).
+
+**Live API calls have not been tested from this build environment.** We recommend running a quick smoke test after configuring your provider:
+
+```bash
+# After install, test that the LLM provider responds
+curl -sf http://localhost:8000/health
+```
+
+If the health check passes but answers fail, check the API logs:
+```bash
+docker compose -f app/infra/docker-compose.yml logs api | grep llm_
+```
+
 ## Provider setup
 
 ### Ollama (default, free, local)
