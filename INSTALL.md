@@ -1,139 +1,105 @@
 # Installation Guide
 
-## One-command install
+## No-Docker install (recommended)
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
+bash ~/.easyrag/start.sh
 ```
 
-The installer will prompt you to choose an AI provider and enter the required settings.
+Open http://localhost:3000.
 
-## What the installer does
+The installer:
+- Checks Python 3.11+ and Node.js 20+
+- Creates a virtual environment and installs Python packages
+- Downloads Qdrant (vector search engine) as a local binary
+- Builds the Next.js frontend
+- Generates `.env` with sensible defaults (SQLite database, no PostgreSQL needed)
+- Prompts for your AI provider
+- Runs database migrations
 
-1. Checks that Docker and Docker Compose are installed and running
-2. Checks that required ports (3000, 8000, 5432, 6333) are available
-3. Clones the EasyRAG repo into `~/.easyrag` (or updates if already present)
-4. Creates a `.env` file from the template with a generated database password
-5. Prompts for your AI provider and writes the config
-6. Builds and starts all containers
-7. Waits for health checks and prints the access URL
+### Requirements
 
-## Provider verification status
+| Dependency | Version | Why |
+|-----------|---------|-----|
+| Python | 3.11+ | Backend runtime |
+| Node.js | 20+ | Frontend build |
+| pip | any | Package install |
+| curl | any | Downloads |
 
-All five providers are **supported** with dedicated adapters. The adapters are implemented against each provider's documented API format and tested at the code level (factory, validation, error handling, payload structure).
+### What runs locally
 
-**Live API calls have not been tested from this build environment.** We recommend running a quick smoke test after configuring your provider:
+- **SQLite** — database, stored in `~/.easyrag/easyrag.db` (no install needed)
+- **Qdrant** — vector search, runs as a local binary in `~/.easyrag/bin/`
+- **FastAPI** — API server on port 8000
+- **Worker** — background document processing
+- **Next.js** — frontend on port 3000
+
+### Lifecycle
 
 ```bash
-# After install, test that the LLM provider responds
-curl -sf http://localhost:8000/health
+bash ~/.easyrag/start.sh       # Start all services
+bash ~/.easyrag/stop.sh         # Stop all services
+bash ~/.easyrag/doctor.sh       # Diagnose issues
+bash ~/.easyrag/uninstall.sh    # Remove EasyRAG
 ```
 
-If the health check passes but answers fail, check the API logs:
+Logs: `~/.easyrag/logs/`
+
+### Updating
+
+Re-run the installer. It preserves your `.env` and data:
+
 ```bash
-docker compose -f app/infra/docker-compose.yml logs api | grep llm_
+curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
+bash ~/.easyrag/start.sh
 ```
 
-## Provider setup
+### Provider setup
 
-### Ollama (default, free, local)
+The installer asks which AI provider to use. For details per provider:
 
+**Ollama (default, free, local):**
 1. Install [Ollama](https://ollama.ai)
 2. Run: `ollama pull llama3.2`
-3. During install, select option 1 (Ollama)
-4. Default base URL: `http://host.docker.internal:11434/v1`
+3. Select option 1 during install
 
-**Required env vars:**
-```
-LLM_PROVIDER=ollama
-ANSWER_LLM_BASE_URL=http://host.docker.internal:11434/v1
-ANSWER_LLM_MODEL=llama3.2
-```
+**OpenAI:**
+- Get key from [platform.openai.com](https://platform.openai.com)
+- Select option 2 during install
 
-**Note for Linux users:** Use `http://172.17.0.1:11434/v1` as the base URL instead of `host.docker.internal`, or add the host Docker gateway IP.
+**Anthropic:**
+- Get key from [console.anthropic.com](https://console.anthropic.com)
+- Select option 3 during install
 
-### OpenAI
+**Gemini:**
+- Get key from [aistudio.google.com](https://aistudio.google.com)
+- Select option 4 during install
 
-1. Get an API key from [platform.openai.com](https://platform.openai.com)
-2. During install, select option 2 (OpenAI)
-3. Enter your API key when prompted
+**Custom OpenAI-compatible:**
+- Any server with `/chat/completions` endpoint
+- Select option 5 during install
 
-**Required env vars:**
-```
-LLM_PROVIDER=openai
-ANSWER_LLM_BASE_URL=https://api.openai.com/v1
-ANSWER_LLM_MODEL=gpt-4o
-ANSWER_LLM_API_KEY=sk-...
-```
+---
 
-Popular models: `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo`
+## Docker install (alternative)
 
-### Anthropic
-
-1. Get an API key from [console.anthropic.com](https://console.anthropic.com)
-2. During install, select option 3 (Anthropic)
-3. Enter your API key when prompted
-
-**Required env vars:**
-```
-LLM_PROVIDER=anthropic
-ANSWER_LLM_BASE_URL=https://api.anthropic.com
-ANSWER_LLM_MODEL=claude-sonnet-4-20250514
-ANSWER_LLM_API_KEY=sk-ant-...
-```
-
-Popular models: `claude-sonnet-4-20250514`, `claude-haiku-4-20250414`
-
-### Google Gemini
-
-1. Get an API key from [aistudio.google.com](https://aistudio.google.com)
-2. During install, select option 4 (Gemini)
-3. Enter your API key when prompted
-
-**Required env vars:**
-```
-LLM_PROVIDER=gemini
-ANSWER_LLM_BASE_URL=https://generativelanguage.googleapis.com
-ANSWER_LLM_MODEL=gemini-2.0-flash
-ANSWER_LLM_API_KEY=AIza...
-```
-
-Popular models: `gemini-2.0-flash`, `gemini-1.5-pro`
-
-### Custom OpenAI-compatible
-
-For self-hosted models via vLLM, LiteLLM, LocalAI, or any server that exposes an OpenAI-compatible `/chat/completions` endpoint:
-
-**Required env vars:**
-```
-LLM_PROVIDER=openai_compatible
-ANSWER_LLM_BASE_URL=http://your-server:8080/v1
-ANSWER_LLM_MODEL=your-model-name
-ANSWER_LLM_API_KEY=              # optional, leave empty if not needed
-```
-
-## Diagnostics
+If you prefer Docker, the original Docker Compose path still works:
 
 ```bash
-bash doctor.sh
-```
-
-Checks Docker, ports, environment, provider config, and service health.
-
-## Uninstall
-
-```bash
-bash uninstall.sh
-```
-
-Stops containers and optionally removes all data.
-
-## Install options
-
-```bash
-# Custom install directory
-EASYRAG_DIR=/opt/easyrag curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
-
-# Update an existing install (just re-run)
 curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
+# The installer detects Docker and can use it
+# Or manually:
+cd ~/.easyrag
+docker compose -f app/infra/docker-compose.yml --env-file .env up -d --build
+```
+
+Docker uses PostgreSQL instead of SQLite. Both paths support all 5 AI providers.
+
+### Docker commands
+
+```bash
+docker compose -f app/infra/docker-compose.yml logs -f    # Logs
+docker compose -f app/infra/docker-compose.yml down        # Stop
+docker compose -f app/infra/docker-compose.yml down -v    # Stop + remove data
 ```

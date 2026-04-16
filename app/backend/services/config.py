@@ -10,21 +10,26 @@ _settings: Settings | None = None
 class Settings(BaseSettings):
     """Central configuration loaded from environment variables.
 
-    Required vars with no default will raise ValidationError on startup
-    if not set. All secrets come from env, never hardcoded.
+    Supports both PostgreSQL and SQLite via the DATABASE_URL variable:
+    - PostgreSQL: postgresql+asyncpg://user:pass@host/db
+    - SQLite:    sqlite+aiosqlite:///path/to/easyrag.db
+
+    For backward compatibility, POSTGRES_URL is also accepted.
     """
 
-    # Database and vector store (required)
-    postgres_url: str
+    # Database — supports PostgreSQL and SQLite
+    # DATABASE_URL takes priority; POSTGRES_URL is a fallback alias
+    database_url: str = ""
+    postgres_url: str = ""
+
+    # Vector store
     qdrant_url: str
     qdrant_api_key: str | None = None
 
     # Authentication (optional for local dev, required for production)
-    # When set, API endpoints require Bearer token authentication
     api_key: str | None = None
 
     # LLM provider configuration
-    # Supported: ollama, openai, anthropic, gemini, openai_compatible
     llm_provider: str = "ollama"
     answer_llm_base_url: str
     answer_llm_model: str
@@ -67,6 +72,19 @@ class Settings(BaseSettings):
     autoscaler_emergency_queue_threshold: int = 10
 
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+    @property
+    def effective_database_url(self) -> str:
+        """Return the effective database URL.
+
+        Priority: DATABASE_URL > POSTGRES_URL > default SQLite path.
+        """
+        if self.database_url:
+            return self.database_url
+        if self.postgres_url:
+            return self.postgres_url
+        # Default: SQLite in the storage directory
+        return f"sqlite+aiosqlite:///./easyrag.db"
 
 
 def get_settings() -> Settings:

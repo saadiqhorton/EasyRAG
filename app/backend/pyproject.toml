@@ -1,13 +1,14 @@
 [project]
 name = "rag-kb-backend"
-version = "0.1.0"
-description = "RAG Knowledge Base Framework - Backend API"
+version = "0.3.0"
+description = "EasyRAG - Backend API"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]",
     "sqlalchemy[asyncio]>=2.0",
     "asyncpg",
+    "aiosqlite",
     "alembic>=1.13",
     "qdrant-client[fastembed]>=1.12",
     "docling>=2.0",
@@ -24,7 +25,6 @@ dev = [
     "pytest-asyncio",
     "httpx",
     "ruff",
-    "aiosqlite",
 ]
 
 [build-system]

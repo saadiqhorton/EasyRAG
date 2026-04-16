@@ -29,7 +29,7 @@ def get_url() -> str:
     """Get the database URL from settings."""
     try:
         settings = Settings()
-        return settings.postgres_url
+        return settings.effective_database_url
     except Exception:
         # Fallback to the URL in alembic.ini
         return config.get_main_option("sqlalchemy.url", "")

@@ -1,63 +1,51 @@
 # Changelog
 
-All notable changes to EasyRAG are documented here.
+## [0.3.0] - 2026-04-15
+
+### Added
+- **No-Docker default install** — EasyRAG now runs without Docker as the primary path
+- `install.sh` rewritten — downloads Qdrant binary, creates Python venv, builds frontend
+- `start.sh` — starts Qdrant, API, worker, and frontend as local processes
+- `stop.sh` — gracefully stops all services
+- SQLite support — replaces PostgreSQL for local installs (no DB server needed)
+- `DATABASE_URL` config — supports both `sqlite+aiosqlite://` and `postgresql+asyncpg://`
+- `aiosqlite` moved to main dependencies (was dev-only)
+- `effective_database_url` property in Settings for backward compatibility
+
+### Changed
+- **Default install is now no-Docker** — Docker remains as fallback/advanced option
+- `README.md` — quick start shows one-command install + start.sh
+- `INSTALL.md` — restructured with no-Docker as primary, Docker as alternative
+- `config.py` — supports DATABASE_URL with fallback to POSTGRES_URL
+- `database.py` — handles SQLite (no connection pooling) vs PostgreSQL
+- `alembic/env.py` — uses effective_database_url
+- `.env.example` — SQLite as default, clearer comments
+- `VERSION` bumped to 0.3.0
+
+### Fixed
+- Database adapter now correctly handles both SQLite and PostgreSQL backends
 
 ## [0.2.0] - 2026-04-15
 
 ### Added
-- **Multi-provider AI support** — EasyRAG now supports 5 AI providers:
-  - **Ollama** (local, free, default)
-  - **OpenAI** (GPT-4o, GPT-4o-mini, etc.)
-  - **Anthropic** (Claude Sonnet, Claude Haiku)
-  - **Google Gemini** (Gemini 2.0 Flash, Gemini 1.5 Pro)
-  - **Custom OpenAI-compatible** (vLLM, LiteLLM, LocalAI, etc.)
-- Provider selection during install with prompts tailored to each provider
+- **Multi-provider AI support** — Ollama, OpenAI, Anthropic, Gemini, Custom
+- Provider selection during install with prompts per provider
+- Provider abstraction layer (`llm_provider.py`) with adapters per API format
 - `LLM_PROVIDER` environment variable (default: `ollama`)
-- `llm_provider.py` — Provider abstraction with adapters per API format
-- `LLMProviderError` — Actionable error messages for auth, model, and connectivity issues
-- Provider-specific checks in `doctor.sh` (validates API key requirements)
-- Linux note in Ollama installer prompt about `host.docker.internal` vs `172.17.0.1`
+- `LLMProviderError` class with actionable error messages
 
 ### Changed
-- `generator.py` now routes all LLM calls through the provider abstraction instead of direct httpx calls
-- Error messages include the provider name for easier debugging
-- `install.sh` shows configured provider on success screen
-- `install.sh` shows existing provider on rerun
-- `docker-compose.yml` passes `LLM_PROVIDER` env var with `ollama` default
-- `.env.example` updated with provider reference table and `LLM_PROVIDER` field
-- `VERSION` bumped to 0.2.0
-
-### Fixed
-- Error messages in Anthropic/Gemini providers now reference `ANSWER_LLM_API_KEY` (was `LLM_API_KEY`)
-- Provider selection on rerun now preserves existing non-Ollama provider config
-- Added Linux Ollama base URL note in installer
+- `generator.py` — routes LLM calls through provider abstraction
+- Error messages include provider name for debugging
+- `install.sh` — interactive provider selection
+- `doctor.sh` — validates API key per provider type
+- `README.md` — provider table with verification status
+- `CHANGELOG.md` — created
 
 ## [0.1.0] - 2026-04-15
 
 ### Added
-- One-command installer (`install.sh`)
-- Diagnostics script (`doctor.sh`)
-- Uninstall script (`uninstall.sh`)
-- Frontend Dockerfile for Next.js standalone build
-- `.env.example` at repo root with minimal config
-- `VERSION` file for release tracking
-- User-facing README (one-command install at the top)
-- `INSTALL.md` with per-provider setup docs
-- `.gitignore` updated for safety (model caches, runtime data, secrets)
-
-### Changed
-- `next.config.ts` — added `output: "standalone"` for Docker builds
-- `docker-compose.yml` — `POSTGRES_USER` defaults to `ragkb`
-- README rewritten for new users (not dev setup)
-
-### Provider verification note
-
-All five providers (Ollama, OpenAI, Anthropic, Gemini, Custom) are implemented
-with dedicated adapters following each provider's documented API format. Code-level
-validation includes: factory tests, API key validation, error message mapping (401,
-403, 404, 429), request payload structure verification, and URL construction tests.
-
-Live API calls have not been tested from this build environment due to network
-restrictions. The adapters should work correctly with real API keys. If you encounter
-issues with a specific provider, please file an issue at:
-https://github.com/saadiqhorton/EasyRAG/issues
+- One-command installer with Docker
+- `doctor.sh` and `uninstall.sh`
+- Frontend Dockerfile
+- User-facing README
