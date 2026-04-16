@@ -68,7 +68,7 @@ start_api() {
   fi
 
   echo "Starting API..."
-  cd "${EASYRAG_DIR}/app/backend"
+  cd "${EASYRAG_DIR}/backend"
 
   # Build DATABASE_URL for SQLite if not set
   export DATABASE_URL="${DATABASE_URL:-sqlite+aiosqlite:///${EASYRAG_DIR}/easyrag.db}"
@@ -105,7 +105,7 @@ start_worker() {
   fi
 
   echo "Starting worker..."
-  cd "${EASYRAG_DIR}/app/backend"
+  cd "${EASYRAG_DIR}/backend"
 
   export DATABASE_URL="${DATABASE_URL:-sqlite+aiosqlite:///${EASYRAG_DIR}/easyrag.db}"
   export QDRANT_URL="${QDRANT_URL:-http://localhost:6333}"
@@ -125,7 +125,7 @@ start_frontend() {
     return
   fi
 
-  local frontend_dir="${EASYRAG_DIR}/app/frontend"
+  local frontend_dir="${EASYRAG_DIR}/frontend"
   if [ -d "${frontend_dir}/.next/standalone" ]; then
     echo "Starting frontend (standalone)..."
     cd "${frontend_dir}"

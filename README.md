@@ -16,12 +16,11 @@ bash ~/.easyrag/start.sh
 
 Open **http://localhost:3000** in your browser.
 
-No Docker needed. The installer handles everything.
+No Docker. No Node. Just Python + the installer.
 
 ## What you need
 
 - **Python 3.11+** — [Install Python](https://www.python.org/downloads/)
-- **Node.js 20+** — [Install Node](https://nodejs.org/) (for the web UI)
 - **An AI provider** — Ollama (free, local) or a cloud API
 
 ## After install

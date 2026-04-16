@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # ────────────────────────────────────────────────────────────────
-# EasyRAG — One-command installer (no Docker required)
+# EasyRAG — One-command installer (release-based, no Node required)
 # Usage:  curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
 # ────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-EASYRAG_VERSION="0.3.0"
+EASYRAG_VERSION="0.3.1"
+RELEASE_BASE_URL="https://github.com/saadiqhorton/EasyRAG/releases/download/v${EASYRAG_VERSION}"
 INSTALL_DIR="${EASYRAG_DIR:-$HOME/.easyrag}"
 DATA_DIR="${INSTALL_DIR}/data"
 LOG_DIR="${INSTALL_DIR}/logs"
@@ -15,7 +16,7 @@ VENV_DIR="${INSTALL_DIR}/.venv"
 QDRANT_VERSION="v1.12.1"
 
 # ── Colors ──────────────────────────────────────────────────────
-RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
+RED='\0.3.1;31m'; GREEN='\0.3.1;32m'; YELLOW='\033[1;33m'; BLUE='\0.3.1;34m'; CYAN='\0.3.1;36m'; BOLD='\033[1m'; NC='\0.3.1m'
 
 step()   { printf "${BLUE}▸${NC} %s\n" "$1"; }
 ok()     { printf "${GREEN}✔${NC} %s\n" "$1"; }
@@ -72,20 +73,6 @@ else
   fail "pip not found. Install it: https://pip.pypa.io/en/stable/installation/"
 fi
 
-step "Checking Node.js (for frontend build)..."
-if command -v node &>/dev/null; then
-  NODE_VERSION=$(node -v | sed 's/v//')
-  NODE_MAJOR=$(echo "$NODE_VERSION" | cut -d. -f1)
-  if [ "$NODE_MAJOR" -ge 20 ]; then
-    ok "Node.js ${NODE_VERSION} found"
-  else
-    warn "Node.js 20+ recommended, found ${NODE_VERSION}"
-    echo "  Frontend build may fail. Install Node 20+: https://nodejs.org/"
-  fi
-else
-  warn "Node.js not found — frontend will not be built"
-  echo "  Install Node 20+ for the web UI: https://nodejs.org/"
-  echo "  Or use Docker: see INSTALL.md"
 fi
 
 step "Checking ports..."
@@ -102,15 +89,26 @@ ok "Port check done"
 step "Setting up EasyRAG at ${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}" "${DATA_DIR}" "${LOG_DIR}" "${PID_DIR}" "${BIN_DIR}"
 
-# ── Clone or update repo ───────────────────────────────────────
-if [ -d "${INSTALL_DIR}/.git" ]; then
-  step "Updating existing install..."
-  (cd "${INSTALL_DIR}" && git pull --ff-only) || warn "Could not pull — continuing with local copy"
+# ── Download release bundle ─────────────────────────────────────
+RELEASE_FILE="easyrag-${EASYRAG_VERSION}-${PLATFORM}.tar.gz"
+RELEASE_URL="${RELEASE_BASE_URL}/${RELEASE_FILE}"
+
+if [ -d "${INSTALL_DIR}/backend" ] && [ -d "${INSTALL_DIR}/frontend" ]; then
+  step "Release already extracted"
 else
-  step "Cloning EasyRAG..."
-  git clone --depth 1 "https://github.com/saadiqhorton/EasyRAG.git" "${INSTALL_DIR}"
+  step "Downloading EasyRAG ${EASYRAG_VERSION} for ${PLATFORM}..."
+  TMPDIR=$(mktemp -d)
+  if curl -fSL --progress-bar -o "${TMPDIR}/${RELEASE_FILE}" "${RELEASE_URL}" 2>/dev/null; then
+    step "Extracting release..."
+    tar xzf "${TMPDIR}/${RELEASE_FILE}" -C "${INSTALL_DIR}"
+    rm -rf "${TMPDIR}"
+    ok "EasyRAG downloaded and extracted"
+  else
+    fail "Could not download release from ${RELEASE_URL}"
+  fi
 fi
-ok "Code is ready"
+
+ok "Release ready"
 
 # ── Create Python virtual environment ───────────────────────────
 if [ ! -d "${VENV_DIR}" ]; then
@@ -121,7 +119,7 @@ fi
 
 step "Installing Python dependencies..."
 "${VENV_DIR}/bin/pip" install -q --upgrade pip 2>/dev/null || true
-"${VENV_DIR}/bin/pip" install -q -e "${INSTALL_DIR}/app/backend" 2>&1 | tail -1
+"${VENV_DIR}/bin/pip" install -q -r "${INSTALL_DIR}/backend/requirements.txt" 2>&1 | tail -1
 ok "Python dependencies installed"
 
 # ── Download Qdrant binary ──────────────────────────────────────
@@ -157,27 +155,6 @@ if [ ! -f "${BIN_DIR}/qdrant" ]; then
   fi
 else
   ok "Qdrant binary already present"
-fi
-
-# ── Build frontend ──────────────────────────────────────────────
-if command -v node &>/dev/null && command -v npm &>/dev/null; then
-  if [ ! -d "${INSTALL_DIR}/app/frontend/.next/standalone" ]; then
-    step "Building frontend (this may take a few minutes)..."
-    cd "${INSTALL_DIR}/app/frontend"
-    npm install --silent 2>&1 | tail -1
-    npm run build 2>&1 | tail -3
-    cd "${INSTALL_DIR}"
-    if [ -d "${INSTALL_DIR}/app/frontend/.next/standalone" ]; then
-      ok "Frontend built"
-    else
-      warn "Frontend build did not produce standalone output"
-    fi
-  else
-    ok "Frontend already built"
-  fi
-else
-  warn "Skipping frontend build (no Node.js). API-only mode."
-  echo "  Install Node.js 20+ and run: cd ${INSTALL_DIR}/app/frontend && npm install && npm run build"
 fi
 
 # ── Environment file ────────────────────────────────────────────
@@ -265,7 +242,7 @@ step "Running database migrations..."
 cd "${INSTALL_DIR}"
 set -a; source "${ENV_FILE}"; set +a
 export DATABASE_URL="${DATABASE_URL:-sqlite+aiosqlite:///${INSTALL_DIR}/easyrag.db}"
-"${VENV_DIR}/bin/python" -m alembic -c app/backend/alembic.ini upgrade head 2>&1 | tail -2 || warn "Migration had issues — may need manual attention"
+"${VENV_DIR}/bin/python" -m alembic -c backend/alembic.ini upgrade head 2>&1 | tail -2 || warn "Migration had issues — may need manual attention"
 ok "Database initialized"
 
 # ── Success ─────────────────────────────────────────────────────

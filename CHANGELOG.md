@@ -1,5 +1,11 @@
-# Changelog
 
+## [0.3.1] - 2026-04-15
+
+### Changed
+- No Node.js required — Frontend is prebuilt in release bundles
+- Install downloads release archive instead of git clone
+- Updated paths for release bundle structure (backend/, frontend/)
+- README reflects Python-only prerequisites
 ## [0.3.0] - 2026-04-15
 
 ### Added
