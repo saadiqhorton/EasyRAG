@@ -1,0 +1,17 @@
+# EasyRAG Backend Dependencies
+# Generated from pyproject.toml
+# Install with: pip install -r requirements.txt
+
+fastapi>=0.115
+uvicorn[standard]
+sqlalchemy[asyncio]>=2.0
+asyncpg
+aiosqlite
+alembic>=1.13
+qdrant-client[fastembed]>=1.12
+docling>=2.0
+sentence-transformers
+pydantic>=2.0
+pydantic-settings
+python-multipart
+httpx
