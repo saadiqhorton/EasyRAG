@@ -2,18 +2,18 @@
 
 ## Platform Quick Reference
 
-| Platform | Recommended Method | See Section |
-|----------|-------------------|-------------|
-| Linux AMD64 | No-Docker install | [No-Docker install](#no-docker-install-recommended) |
-| Windows 10/11 | WSL2 + Ubuntu | [Windows (WSL2)](#windows-wsl2) |
-| macOS | Docker install | [Docker install](#docker-install-alternative) |
-| Other | Docker install | [Docker install](#docker-install-alternative) |
+| Platform | Recommended Method | Prerequisites |
+|----------|-------------------|---------------|
+| Linux AMD64 | One-command install | None — Python is bundled |
+| Windows 10/11 | WSL2 + Ubuntu | WSL2 (free from Microsoft) |
+| macOS | Docker install | Docker Desktop |
+| Other | Docker install | Docker |
 
 ---
 
-## No-Docker install (recommended)
+## One-command install (Linux AMD64)
 
-Works on Linux AMD64 and Windows (via WSL2).
+The easiest way to install EasyRAG on Linux AMD64. No Python or Node required — everything is bundled.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
@@ -23,24 +23,26 @@ bash ~/.easyrag/start.sh
 Open http://localhost:3000.
 
 The installer:
-- Checks Python 3.11+
-- Creates a virtual environment and installs Python packages
-- Downloads Qdrant (vector search engine) as a local binary
-- Generates `.env` with sensible defaults (SQLite database, no PostgreSQL needed)
+- Downloads the release bundle (~100 MB) with bundled Python runtime
+- Creates a virtual environment
+- Installs Python dependencies
+- Downloads Qdrant (vector search engine)
+- Generates `.env` with sensible defaults
 - Prompts for your AI provider (in interactive mode)
 - Runs database migrations
 
 ### Requirements
 
-| Dependency | Version | Why |
-|-----------|---------|-----|
-| Python | 3.11+ | Backend runtime |
-| pip | any | Package install |
-| curl | any | Downloads |
+| Dependency | Required | Notes |
+|-----------|----------|-------|
+| Python | **No** | Bundled with EasyRAG |
+| curl | Yes | For downloading the installer and bundle |
+| Linux AMD64 | Yes | x86_64 architecture |
 
 ### What runs locally
 
-- **SQLite** — database, stored in `~/.easyrag/easyrag.db` (no install needed)
+- **Python 3.12** — bundled runtime in `~/.easyrag/runtime/`
+- **SQLite** — database, stored in `~/.easyrag/easyrag.db`
 - **Qdrant** — vector search, runs as a local binary in `~/.easyrag/bin/`
 - **FastAPI** — API server on port 8000
 - **Worker** — background document processing
@@ -98,11 +100,12 @@ curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.s
 ```
 
 The installer will:
-- Set up Python and dependencies inside WSL
-- Download the Qdrant binary for Linux
+- Download the Linux AMD64 bundle with bundled Python
+- Set up the virtual environment
+- Download Qdrant
 - Create configuration files
 
-If running interactively, you'll be prompted to select an AI provider. For non-interactive installs, defaults to Ollama.
+If running interactively, you'll be prompted to select an AI provider.
 
 ### Step 3: Start EasyRAG
 
@@ -124,6 +127,7 @@ WSL2 automatically forwards localhost ports to Windows. No extra configuration n
 
 Inside WSL:
 - **Install location**: `~/.easyrag/` (which is `/home/YOUR_USERNAME/.easyrag/`)
+- **Python runtime**: `~/.easyrag/runtime/` (bundled)
 - **Database**: `~/.easyrag/easyrag.db`
 - **Documents**: `~/.easyrag/data/`
 - **Logs**: `~/.easyrag/logs/`
@@ -246,7 +250,7 @@ The installer asks which AI provider to use. For details per provider:
 **On Windows:**
 1. Install from [ollama.ai](https://ollama.ai)
 2. Run: `ollama pull llama3.2` in PowerShell
-3. For WSL: use `http://host.docker.internal:11434/v1` as base URL
+3. For WSL: use the Windows host IP as base URL
 
 ### OpenAI
 
@@ -272,17 +276,17 @@ The installer asks which AI provider to use. For details per provider:
 
 ## Platform-specific notes
 
-### Linux
+### Linux AMD64
 
-The no-Docker install is fully tested on Ubuntu 22.04+. Other distributions should work with Python 3.11+.
+The one-command install is fully tested on Ubuntu 22.04+ and works on any Linux AMD64 distribution. Python is bundled, so no system Python is required.
 
 ### Windows
 
-- **No-Docker**: Use WSL2 + Ubuntu (documented above)
+- **One-command**: Use WSL2 + Ubuntu (documented above)
 - **Docker**: Works on Windows with Docker Desktop
 - **Native**: Not yet supported
 
 ### macOS
 
-- **No-Docker**: Planned but not yet released
+- **One-command**: Planned but not yet released
 - **Docker**: Works with Docker Desktop

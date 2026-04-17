@@ -16,20 +16,26 @@ bash ~/.easyrag/start.sh
 
 Open **http://localhost:3000** in your browser.
 
-No Docker. No Node. Just Python + the installer.
+No Docker. No Node. No Python setup. Just one command.
 
 ## Platform Support
 
 | Platform | Method | Status |
 |----------|--------|--------|
-| **Linux AMD64** | No-Docker install | ✅ Supported |
+| **Linux AMD64** | One-command install | ✅ Supported |
 | **Windows** | WSL2 + Ubuntu | ✅ Supported |
-| **macOS** | No-Docker install | ⏳ Coming soon |
-| **Docker** | Docker Compose | ✅ All platforms |
+| **macOS** | Docker | ✅ Available |
+| **macOS** | One-command install | ⏳ Coming soon |
+
+### What you need
+
+- **Linux AMD64** — Nothing else. Python is bundled.
+- **Windows** — WSL2 + Ubuntu (free from Microsoft Store)
+- **AI Provider** — Ollama (free, local) or a cloud API key
 
 ### Windows Users
 
-EasyRAG runs on Windows via **WSL2** (Windows Subsystem for Linux). This is the supported Windows path.
+EasyRAG runs on Windows via **WSL2** (Windows Subsystem for Linux). This is the supported Windows path — native Windows packaging is not yet available.
 
 **Quick WSL setup:**
 1. Install WSL2: `wsl --install` in PowerShell (Admin)
@@ -38,11 +44,6 @@ EasyRAG runs on Windows via **WSL2** (Windows Subsystem for Linux). This is the 
 4. Open http://localhost:3000 in your Windows browser
 
 See [INSTALL.md](INSTALL.md) for detailed WSL instructions.
-
-## What you need
-
-- **Python 3.11+** — [Install Python](https://www.python.org/downloads/)
-- **An AI provider** — Ollama (free, local) or a cloud API
 
 ## After install
 
@@ -99,6 +100,8 @@ Local services:
 - **Qdrant** — Vector search engine on port 6333
 - **Frontend** — Next.js on port 3000
 - **Database** — SQLite (local file, no setup needed)
+
+The Linux AMD64 bundle includes a complete Python runtime. No system Python required.
 
 ## License
 

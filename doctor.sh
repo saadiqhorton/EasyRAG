@@ -27,16 +27,16 @@ if [ "$IS_WSL" = true ]; then
 fi
 printf "\n\n"
 
-# 1. Python
-if command -v python3 &>/dev/null; then
-  PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "?")
-  if [ "${PY_VER%%.*}" -ge 3 ] && [ "${PY_VER#*.}" -ge 11 ] 2>/dev/null; then
-    ok "Python ${PY_VER}"
-  else
-    warn "Python ${PY_VER} — need 3.11+"
-  fi
+# 1. Bundled Python runtime
+if [ -f "${EASYRAG_DIR}/runtime/bin/python3" ]; then
+  PY_VER=$("${EASYRAG_DIR}/runtime/bin/python3" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "?")
+  ok "Bundled Python ${PY_VER}"
+elif [ -f "${EASYRAG_DIR}/.venv/bin/python3" ]; then
+  # Fallback: check venv Python
+  PY_VER=$("${EASYRAG_DIR}/.venv/bin/python3" -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null || echo "?")
+  ok "Python ${PY_VER} (venv)"
 else
-  fail "Python 3 not found"
+  fail "Python runtime not found"
 fi
 
 # 2. Virtual environment
@@ -49,7 +49,7 @@ fi
 # 3. Qdrant binary
 if [ -f "${EASYRAG_DIR}/bin/qdrant" ]; then
   ok "Qdrant binary present"
-elif command -v docker &>/dev/null && docker ps &>/dev/null 2>&1; then
+elif command -v docker >/dev/null 2>&1 && docker ps >/dev/null 2>&1; then
   ok "Docker available (Qdrant may run in container)"
 else
   fail "Qdrant binary not found and Docker not available"
@@ -95,9 +95,9 @@ fi
 
 # 10. Ports
 for port in 3000 8000 6333; do
-  if command -v ss &>/dev/null && ss -tlnp 2>/dev/null | grep -q ":${port} "; then
+  if command -v ss >/dev/null 2>&1 && ss -tlnp 2>/dev/null | grep -q ":${port} "; then
     warn "Port ${port} in use"
-  elif command -v lsof &>/dev/null && lsof -i :"${port}" &>/dev/null 2>&1; then
+  elif command -v lsof >/dev/null 2>&1 && lsof -i :"${port}" >/dev/null 2>&1; then
     warn "Port ${port} in use"
   else
     ok "Port ${port} free"
@@ -105,8 +105,8 @@ for port in 3000 8000 6333; do
 done
 
 # 11-13. Service health
-if curl -sf --max-time 5 http://localhost:8000/health &>/dev/null; then ok "API healthy"; else warn "API not responding"; fi
-if curl -sf --max-time 5 http://localhost:6333/healthz &>/dev/null; then ok "Qdrant healthy"; else warn "Qdrant not responding"; fi
+if curl -sf --max-time 5 http://localhost:8000/health >/dev/null 2>&1; then ok "API healthy"; else warn "API not responding"; fi
+if curl -sf --max-time 5 http://localhost:6333/healthz >/dev/null 2>&1; then ok "Qdrant healthy"; else warn "Qdrant not responding"; fi
 code=$(curl -sf --max-time 5 -o /dev/null -w "%{http_code}" http://localhost:3000 2>/dev/null || echo "000")
 if [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then ok "Frontend responding"; else warn "Frontend not responding"; fi
 

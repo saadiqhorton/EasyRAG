@@ -1,4 +1,18 @@
 
+## [0.4.0] - 2026-04-17
+
+### Added
+- **Bundled Python runtime** — Linux AMD64 releases now include Python 3.12
+- **No system Python required** — One-command install works on clean machines
+- Updated `install.sh` — removed Python prerequisite check, uses bundled runtime
+- Updated `start.sh` — uses bundled Python for all services
+- Updated `doctor.sh` — detects and reports bundled Python runtime
+
+### Changed
+- Release bundle size increased (~100 MB) due to included Python runtime
+- README updated — emphasizes "no prerequisites" for Linux AMD64
+- INSTALL.md restructured — clear separation between bundled and Docker paths
+
 ## [0.3.2] - 2026-04-17
 
 ### Added

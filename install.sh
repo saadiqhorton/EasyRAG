@@ -1,17 +1,18 @@
 #!/usr/bin/env bash
 # ────────────────────────────────────────────────────────────────
-# EasyRAG — One-command installer (release-based, no Node required)
+# EasyRAG — One-command installer (no system prerequisites required)
 # Usage:  curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
 # ────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-EASYRAG_VERSION="0.3.2"
+EASYRAG_VERSION="0.4.0"
 RELEASE_BASE_URL="https://github.com/saadiqhorton/EasyRAG/releases/download/v${EASYRAG_VERSION}"
 INSTALL_DIR="${EASYRAG_DIR:-$HOME/.easyrag}"
 DATA_DIR="${INSTALL_DIR}/data"
 LOG_DIR="${INSTALL_DIR}/logs"
 PID_DIR="${INSTALL_DIR}/.pids"
 BIN_DIR="${INSTALL_DIR}/bin"
+RUNTIME_DIR="${INSTALL_DIR}/runtime"
 VENV_DIR="${INSTALL_DIR}/.venv"
 QDRANT_VERSION="v1.12.1"
 
@@ -51,34 +52,11 @@ echo ""
 
 detect_platform
 
-step "Checking Python..."
-if command -v python3 &>/dev/null; then
-  PY_VERSION=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-  PY_MAJOR=$(echo "$PY_VERSION" | cut -d. -f1)
-  PY_MINOR=$(echo "$PY_VERSION" | cut -d. -f2)
-  if [ "$PY_MAJOR" -ge 3 ] && [ "$PY_MINOR" -ge 11 ]; then
-    ok "Python ${PY_VERSION} found"
-  else
-    fail "Python 3.11+ required, found ${PY_VERSION}.
-  Install: https://www.python.org/downloads/"
-  fi
-else
-  fail "Python 3 not found.
-  Install: https://www.python.org/downloads/"
-fi
-
-step "Checking pip..."
-if python3 -m pip &>/dev/null 2>&1; then
-  ok "pip available"
-else
-  fail "pip not found. Install it: https://pip.pypa.io/en/stable/installation/"
-fi
-
 step "Checking ports..."
 for port in 3000 8000 6333; do
-  if command -v ss &>/dev/null && ss -tlnp 2>/dev/null | grep -q ":${port} "; then
+  if command -v ss >/dev/null 2>&1 && ss -tlnp 2>/dev/null | grep -q ":${port} "; then
     warn "Port ${port} is already in use"
-  elif command -v lsof &>/dev/null && lsof -i :"${port}" &>/dev/null 2>&1; then
+  elif command -v lsof >/dev/null 2>&1 && lsof -i :"${port}" >/dev/null 2>&1; then
     warn "Port ${port} is already in use"
   fi
 done
@@ -92,7 +70,7 @@ mkdir -p "${INSTALL_DIR}" "${DATA_DIR}" "${LOG_DIR}" "${PID_DIR}" "${BIN_DIR}"
 RELEASE_FILE="easyrag-${EASYRAG_VERSION}-${PLATFORM}.tar.gz"
 RELEASE_URL="${RELEASE_BASE_URL}/${RELEASE_FILE}"
 
-if [ -d "${INSTALL_DIR}/backend" ] && [ -d "${INSTALL_DIR}/frontend" ]; then
+if [ -d "${INSTALL_DIR}/backend" ] && [ -d "${INSTALL_DIR}/runtime" ]; then
   step "Release already extracted"
 else
   step "Downloading EasyRAG ${EASYRAG_VERSION} for ${PLATFORM}..."
@@ -109,10 +87,16 @@ fi
 
 ok "Release ready"
 
+# ── Verify bundled Python runtime ───────────────────────────────
+if [ ! -f "${RUNTIME_DIR}/bin/python3" ]; then
+  fail "Bundled Python runtime not found. Release bundle may be incomplete."
+fi
+ok "Bundled Python runtime found"
+
 # ── Create Python virtual environment ───────────────────────────
 if [ ! -d "${VENV_DIR}" ]; then
   step "Creating Python virtual environment..."
-  python3 -m venv "${VENV_DIR}"
+  "${RUNTIME_DIR}/bin/python3" -m venv "${VENV_DIR}"
   ok "Virtual environment created"
 fi
 

@@ -4,7 +4,7 @@ from pydantic_settings import BaseSettings
 
 QDRANT_COLLECTION_NAME = "rag_kb_chunks"
 
-_settings: Settings | None = None
+_settings: any = None
 
 
 class Settings(BaseSettings):
@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     postgres_url: str = ""
 
     # Vector store
-    qdrant_url: str
+    qdrant_url: str = "http://localhost:6333"
     qdrant_api_key: str | None = None
 
     # Authentication (optional for local dev, required for production)
@@ -31,8 +31,8 @@ class Settings(BaseSettings):
 
     # LLM provider configuration
     llm_provider: str = "ollama"
-    answer_llm_base_url: str
-    answer_llm_model: str
+    answer_llm_base_url: str = "http://localhost:11434/v1"
+    answer_llm_model: str = "llama3.2"
     answer_llm_api_key: str | None = None
 
     # Embedding and reranker models

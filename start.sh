@@ -22,6 +22,9 @@ PID_DIR="${EASYRAG_DIR}/.pids"
 
 mkdir -p "${DATA_DIR}" "${LOG_DIR}" "${PID_DIR}"
 
+# Set PYTHONPATH so 'app' is importable
+export PYTHONPATH="${EASYRAG_DIR}:${PYTHONPATH:-}"
+
 # ── Functions ──────────────────────────────────────────────────
 is_running() {
   local pid_file="$1"
@@ -68,7 +71,6 @@ start_api() {
   fi
 
   echo "Starting API..."
-  cd "${EASYRAG_DIR}/backend"
 
   # Build DATABASE_URL for SQLite if not set
   export DATABASE_URL="${DATABASE_URL:-sqlite+aiosqlite:///${EASYRAG_DIR}/easyrag.db}"
@@ -76,10 +78,16 @@ start_api() {
   export STORAGE_PATH="${EASYRAG_DIR}/data/storage"
   export CORS_ORIGINS="${CORS_ORIGINS:-http://localhost:${FRONTEND_PORT}}"
 
+  # Set PYTHONPATH so imports work correctly
+  # The 'app' package should be importable from the install directory
+  export PYTHONPATH="${EASYRAG_DIR}:${PYTHONPATH:-}"
+
   # Run migrations first
+  cd "${EASYRAG_DIR}/backend"
   "${EASYRAG_DIR}/.venv/bin/python" -m alembic upgrade head 2>> "${LOG_DIR}/api.log" || true
 
-  # Start API
+  # Start API from EASYRAG_DIR so 'app' is importable
+  cd "${EASYRAG_DIR}"
   "${EASYRAG_DIR}/.venv/bin/uvicorn" app.backend.main:app \
     --host 0.0.0.0 --port "${API_PORT}" \
     &>> "${LOG_DIR}/api.log" &
@@ -105,12 +113,15 @@ start_worker() {
   fi
 
   echo "Starting worker..."
-  cd "${EASYRAG_DIR}/backend"
 
   export DATABASE_URL="${DATABASE_URL:-sqlite+aiosqlite:///${EASYRAG_DIR}/easyrag.db}"
   export QDRANT_URL="${QDRANT_URL:-http://localhost:6333}"
   export STORAGE_PATH="${EASYRAG_DIR}/data/storage"
 
+  # Set PYTHONPATH so imports work correctly
+  export PYTHONPATH="${EASYRAG_DIR}:${PYTHONPATH:-}"
+
+  cd "${EASYRAG_DIR}"
   "${EASYRAG_DIR}/.venv/bin/python" -m app.backend.workers.ingestion_worker \
     &>> "${LOG_DIR}/worker.log" &
   echo $! > "$pid_file"
@@ -131,6 +142,15 @@ start_frontend() {
     cd "${frontend_dir}"
     PORT="${FRONTEND_PORT}" HOSTNAME="0.0.0.0" \
       node .next/standalone/server.js \
+      &>> "${LOG_DIR}/frontend.log" &
+    echo $! > "$pid_file"
+    cd "${EASYRAG_DIR}"
+  elif [ -f "${frontend_dir}/server.js" ]; then
+    # Release bundle has standalone server.js directly
+    echo "Starting frontend (standalone)..."
+    cd "${frontend_dir}"
+    PORT="${FRONTEND_PORT}" HOSTNAME="0.0.0.0" \
+      node server.js \
       &>> "${LOG_DIR}/frontend.log" &
     echo $! > "$pid_file"
     cd "${EASYRAG_DIR}"
