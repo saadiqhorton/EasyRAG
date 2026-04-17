@@ -5,7 +5,7 @@
 # ────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-EASYRAG_VERSION="0.3.1"
+EASYRAG_VERSION="0.3.2"
 RELEASE_BASE_URL="https://github.com/saadiqhorton/EasyRAG/releases/download/v${EASYRAG_VERSION}"
 INSTALL_DIR="${EASYRAG_DIR:-$HOME/.easyrag}"
 DATA_DIR="${INSTALL_DIR}/data"
@@ -16,7 +16,7 @@ VENV_DIR="${INSTALL_DIR}/.venv"
 QDRANT_VERSION="v1.12.1"
 
 # ── Colors ──────────────────────────────────────────────────────
-RED='\0.3.1;31m'; GREEN='\0.3.1;32m'; YELLOW='\033[1;33m'; BLUE='\0.3.1;34m'; CYAN='\0.3.1;36m'; BOLD='\033[1m'; NC='\0.3.1m'
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; BLUE='\033[0;34m'; CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
 step()   { printf "${BLUE}▸${NC} %s\n" "$1"; }
 ok()     { printf "${GREEN}✔${NC} %s\n" "$1"; }
@@ -41,7 +41,8 @@ detect_platform() {
     *)            fail "Unsupported architecture: ${ARCH}";;
   esac
 
-  ok "Platform: ${OS}-${ARCH}"
+  PLATFORM="${OS}-${ARCH}"
+  ok "Platform: ${PLATFORM}"
 }
 
 # ── Preflight checks ────────────────────────────────────────────
@@ -71,8 +72,6 @@ if python3 -m pip &>/dev/null 2>&1; then
   ok "pip available"
 else
   fail "pip not found. Install it: https://pip.pypa.io/en/stable/installation/"
-fi
-
 fi
 
 step "Checking ports..."
@@ -175,66 +174,80 @@ else
 fi
 
 # ── Provider selection ───────────────────────────────────────────
-if grep -q "^LLM_PROVIDER=ollama$" "${ENV_FILE}" 2>/dev/null || ! grep -q "^LLM_PROVIDER=" "${ENV_FILE}" 2>/dev/null; then
-  echo ""
-  banner "Choose your AI provider"
-  echo "  ${CYAN}1)${NC} Ollama (local, free, default)"
-  echo "  ${CYAN}2)${NC} OpenAI (GPT-4o, etc.)"
-  echo "  ${CYAN}3)${NC} Anthropic (Claude)"
-  echo "  ${CYAN}4)${NC} Google Gemini"
-  echo "  ${CYAN}5)${NC} Custom OpenAI-compatible endpoint"
-  echo ""
+# Check if we're in a TTY (interactive) or piped (non-interactive)
+if [ -t 0 ] && [ -t 1 ]; then
+  INTERACTIVE=true
+else
+  INTERACTIVE=false
+fi
 
-  read -r -p "Select provider [1-5]: " choice < /dev/tty
+if ! grep -q "^LLM_PROVIDER=" "${ENV_FILE}" 2>/dev/null || \
+   (grep -q "^LLM_PROVIDER=ollama$" "${ENV_FILE}" 2>/dev/null && [ "$INTERACTIVE" = true ]); then
 
-  case "${choice}" in
-    1|"")
-      LLM_PROVIDER="ollama"
-      LLM_BASE_URL="http://localhost:11434/v1"
-      LLM_MODEL="llama3.2"
-      LLM_API_KEY=""
-      echo ""
-      echo "  Ollama selected. Make sure Ollama is running: ${CYAN}ollama serve${NC}"
-      read -r -p "  Base URL [${LLM_BASE_URL}]: " base_url < /dev/tty
-      LLM_BASE_URL="${base_url:-${LLM_BASE_URL}}"
-      read -r -p "  Model [${LLM_MODEL}]: " model < /dev/tty
-      LLM_MODEL="${model:-${LLM_MODEL}}"
-      ;;
-    2)
-      LLM_PROVIDER="openai"; LLM_BASE_URL="https://api.openai.com/v1"; LLM_MODEL="gpt-4o"
-      echo ""; read -r -p "  OpenAI API key: " api_key < /dev/tty; LLM_API_KEY="${api_key}"
-      read -r -p "  Model [${LLM_MODEL}]: " model < /dev/tty; LLM_MODEL="${model:-${LLM_MODEL}}"
-      ;;
-    3)
-      LLM_PROVIDER="anthropic"; LLM_BASE_URL="https://api.anthropic.com"; LLM_MODEL="claude-sonnet-4-20250514"
-      echo ""; read -r -p "  Anthropic API key: " api_key < /dev/tty; LLM_API_KEY="${api_key}"
-      read -r -p "  Model [${LLM_MODEL}]: " model < /dev/tty; LLM_MODEL="${model:-${LLM_MODEL}}"
-      ;;
-    4)
-      LLM_PROVIDER="gemini"; LLM_BASE_URL="https://generativelanguage.googleapis.com"; LLM_MODEL="gemini-2.0-flash"
-      echo ""; read -r -p "  Google AI API key: " api_key < /dev/tty; LLM_API_KEY="${api_key}"
-      read -r -p "  Model [${LLM_MODEL}]: " model < /dev/tty; LLM_MODEL="${model:-${LLM_MODEL}}"
-      ;;
-    5)
-      LLM_PROVIDER="openai_compatible"
-      echo ""; read -r -p "  Base URL: " base_url < /dev/tty; LLM_BASE_URL="${base_url}"
-      read -r -p "  Model name: " model < /dev/tty; LLM_MODEL="${model}"
-      read -r -p "  API key (empty if not needed): " api_key < /dev/tty; LLM_API_KEY="${api_key}"
-      ;;
-    *)
-      LLM_PROVIDER="ollama"; LLM_BASE_URL="http://localhost:11434/v1"; LLM_MODEL="llama3.2"; LLM_API_KEY=""
-      warn "Invalid choice, defaulting to Ollama"
-      ;;
-  esac
+  if [ "$INTERACTIVE" = true ]; then
+    echo ""
+    banner "Choose your AI provider"
+    echo "  ${CYAN}1)${NC} Ollama (local, free, default)"
+    echo "  ${CYAN}2)${NC} OpenAI (GPT-4o, etc.)"
+    echo "  ${CYAN}3)${NC} Anthropic (Claude)"
+    echo "  ${CYAN}4)${NC} Google Gemini"
+    echo "  ${CYAN}5)${NC} Custom OpenAI-compatible endpoint"
+    echo ""
 
-  # Write to .env
-  SED_CMD="sed -i"
-  [ "$(uname)" = "Darwin" ] && SED_CMD="sed -i ''"
-  $SED_CMD "s|^LLM_PROVIDER=.*|LLM_PROVIDER=${LLM_PROVIDER}|" "${ENV_FILE}"
-  $SED_CMD "s|^ANSWER_LLM_BASE_URL=.*|ANSWER_LLM_BASE_URL=${LLM_BASE_URL}|" "${ENV_FILE}"
-  $SED_CMD "s|^ANSWER_LLM_MODEL=.*|ANSWER_LLM_MODEL=${LLM_MODEL}|" "${ENV_FILE}"
-  $SED_CMD "s|^ANSWER_LLM_API_KEY=.*|ANSWER_LLM_API_KEY=${LLM_API_KEY}|" "${ENV_FILE}"
-  ok "Provider: ${LLM_PROVIDER} (${LLM_MODEL})"
+    read -r -p "Select provider [1-5]: " choice
+
+    case "${choice}" in
+      1|"")
+        LLM_PROVIDER="ollama"
+        LLM_BASE_URL="http://localhost:11434/v1"
+        LLM_MODEL="llama3.2"
+        LLM_API_KEY=""
+        echo ""
+        echo "  Ollama selected. Make sure Ollama is running: ${CYAN}ollama serve${NC}"
+        read -r -p "  Base URL [${LLM_BASE_URL}]: " base_url
+        LLM_BASE_URL="${base_url:-${LLM_BASE_URL}}"
+        read -r -p "  Model [${LLM_MODEL}]: " model
+        LLM_MODEL="${model:-${LLM_MODEL}}"
+        ;;
+      2)
+        LLM_PROVIDER="openai"; LLM_BASE_URL="https://api.openai.com/v1"; LLM_MODEL="gpt-4o"
+        echo ""; read -r -p "  OpenAI API key: " api_key; LLM_API_KEY="${api_key}"
+        read -r -p "  Model [${LLM_MODEL}]: " model; LLM_MODEL="${model:-${LLM_MODEL}}"
+        ;;
+      3)
+        LLM_PROVIDER="anthropic"; LLM_BASE_URL="https://api.anthropic.com"; LLM_MODEL="claude-sonnet-4-20250514"
+        echo ""; read -r -p "  Anthropic API key: " api_key; LLM_API_KEY="${api_key}"
+        read -r -p "  Model [${LLM_MODEL}]: " model; LLM_MODEL="${model:-${LLM_MODEL}}"
+        ;;
+      4)
+        LLM_PROVIDER="gemini"; LLM_BASE_URL="https://generativelanguage.googleapis.com"; LLM_MODEL="gemini-2.0-flash"
+        echo ""; read -r -p "  Google AI API key: " api_key; LLM_API_KEY="${api_key}"
+        read -r -p "  Model [${LLM_MODEL}]: " model; LLM_MODEL="${model:-${LLM_MODEL}}"
+        ;;
+      5)
+        LLM_PROVIDER="openai_compatible"
+        echo ""; read -r -p "  Base URL: " base_url; LLM_BASE_URL="${base_url}"
+        read -r -p "  Model name: " model; LLM_MODEL="${model}"
+        read -r -p "  API key (empty if not needed): " api_key; LLM_API_KEY="${api_key}"
+        ;;
+      *)
+        LLM_PROVIDER="ollama"; LLM_BASE_URL="http://localhost:11434/v1"; LLM_MODEL="llama3.2"; LLM_API_KEY=""
+        warn "Invalid choice, defaulting to Ollama"
+        ;;
+    esac
+
+    # Write to .env
+    SED_CMD="sed -i"
+    [ "$(uname)" = "Darwin" ] && SED_CMD="sed -i ''"
+    $SED_CMD "s|^LLM_PROVIDER=.*|LLM_PROVIDER=${LLM_PROVIDER}|" "${ENV_FILE}"
+    $SED_CMD "s|^ANSWER_LLM_BASE_URL=.*|ANSWER_LLM_BASE_URL=${LLM_BASE_URL}|" "${ENV_FILE}"
+    $SED_CMD "s|^ANSWER_LLM_MODEL=.*|ANSWER_LLM_MODEL=${LLM_MODEL}|" "${ENV_FILE}"
+    $SED_CMD "s|^ANSWER_LLM_API_KEY=.*|ANSWER_LLM_API_KEY=${LLM_API_KEY}|" "${ENV_FILE}"
+    ok "Provider: ${LLM_PROVIDER} (${LLM_MODEL})"
+  else
+    # Non-interactive: use defaults from .env.example (already set)
+    ok "Using default provider (ollama) - non-interactive mode"
+  fi
 fi
 
 # ── Run database migrations ─────────────────────────────────────

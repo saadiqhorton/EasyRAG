@@ -1,6 +1,6 @@
 [project]
 name = "rag-kb-backend"
-version = "0.3.1"
+version = "0.3.2"
 description = "EasyRAG - Backend API"
 requires-python = ">=3.11"
 dependencies = [

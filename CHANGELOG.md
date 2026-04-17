@@ -1,4 +1,18 @@
 
+## [0.3.2] - 2026-04-17
+
+### Added
+- **Windows support via WSL2** — EasyRAG now runs on Windows 10/11 through WSL2 + Ubuntu
+- WSL detection in `doctor.sh` with Windows-specific guidance
+- Complete WSL documentation in `INSTALL.md` including provider setup and troubleshooting
+- Platform support table in `README.md` showing Linux AMD64, Windows (WSL2), macOS (Docker)
+
+### Fixed
+- Release bundle now includes required `app/` directory for Python imports
+- Release bundle now includes full `.next/` directory for Next.js standalone
+- Release bundle includes `.env.example` at root
+- install.sh handles non-interactive mode (defaults to Ollama)
+
 ## [0.3.1] - 2026-04-15
 
 ### Changed

@@ -4,19 +4,40 @@ Upload your documents, ask questions, get answers with citations.
 
 ## Quick Start
 
-```
+```bash
 curl -fsSL https://raw.githubusercontent.com/saadiqhorton/EasyRAG/main/install.sh | bash
 ```
 
 Then start the app:
 
-```
+```bash
 bash ~/.easyrag/start.sh
 ```
 
 Open **http://localhost:3000** in your browser.
 
 No Docker. No Node. Just Python + the installer.
+
+## Platform Support
+
+| Platform | Method | Status |
+|----------|--------|--------|
+| **Linux AMD64** | No-Docker install | ✅ Supported |
+| **Windows** | WSL2 + Ubuntu | ✅ Supported |
+| **macOS** | No-Docker install | ⏳ Coming soon |
+| **Docker** | Docker Compose | ✅ All platforms |
+
+### Windows Users
+
+EasyRAG runs on Windows via **WSL2** (Windows Subsystem for Linux). This is the supported Windows path.
+
+**Quick WSL setup:**
+1. Install WSL2: `wsl --install` in PowerShell (Admin)
+2. Open Ubuntu
+3. Run the install command above
+4. Open http://localhost:3000 in your Windows browser
+
+See [INSTALL.md](INSTALL.md) for detailed WSL instructions.
 
 ## What you need
 

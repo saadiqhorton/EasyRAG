@@ -15,7 +15,17 @@ fail()   { FAILED=$((FAILED+1)); TOTAL=$((TOTAL+1)); printf "  ${RED}[FAIL]${NC}
 warn()   { WARNINGS=$((WARNINGS+1)); TOTAL=$((TOTAL+1)); printf "  ${YELLOW}[WARN]${NC} %s\n" "$1"; }
 info()   { printf "         %s\n" "$1"; }
 
-echo ""; printf "${BOLD}EasyRAG Doctor${NC}\n\n"
+# Detect WSL
+IS_WSL=false
+if grep -q "microsoft" /proc/version 2>/dev/null || grep -q "WSL" /proc/version 2>/dev/null; then
+  IS_WSL=true
+fi
+
+echo ""; printf "${BOLD}EasyRAG Doctor${NC}"
+if [ "$IS_WSL" = true ]; then
+  printf " ${CYAN}(WSL2 detected)${NC}"
+fi
+printf "\n\n"
 
 # 1. Python
 if command -v python3 &>/dev/null; then
@@ -46,7 +56,7 @@ else
 fi
 
 # 4. Frontend build
-if [ -d "${EASYRAG_DIR}/app/frontend/.next/standalone" ]; then
+if [ -d "${EASYRAG_DIR}/frontend/.next/standalone" ]; then
   ok "Frontend built (standalone)"
 else
   warn "Frontend not built — API-only mode"
@@ -103,6 +113,20 @@ if [ "$code" -ge 200 ] && [ "$code" -lt 400 ]; then ok "Frontend responding"; el
 # 14. Disk space
 usage=$(df -h / | awk 'NR==2{print $5}' | sed 's/%//')
 if [ "${usage:-0}" -lt 85 ]; then ok "Disk: ${usage}%"; else warn "Disk: ${usage}%"; fi
+
+# 15. WSL-specific checks
+if [ "$IS_WSL" = true ]; then
+  # Check if Windows host can reach WSL
+  WINDOWS_HOST=$(ip route | grep default | awk '{print $3}' 2>/dev/null || echo "")
+  if [ -n "$WINDOWS_HOST" ]; then
+    ok "WSL network gateway: ${WINDOWS_HOST}"
+    info "Access EasyRAG from Windows at: http://localhost:3000"
+  else
+    warn "WSL network gateway not detected"
+  fi
+else
+  TOTAL=$((TOTAL-1))  # Skip this check on non-WSL
+fi
 
 # Summary
 echo ""; printf "${BOLD}──────────────────────────────────${NC}\n"
