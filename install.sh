@@ -102,7 +102,7 @@ fi
 
 step "Installing Python dependencies..."
 "${VENV_DIR}/bin/pip" install -q --upgrade pip 2>/dev/null || true
-"${VENV_DIR}/bin/pip" install -q -r "${INSTALL_DIR}/backend/requirements.txt" 2>&1 | tail -1
+"${VENV_DIR}/bin/pip" install -q -r "${INSTALL_DIR}/backend/requirements.txt"
 ok "Python dependencies installed"
 
 # ── Download Qdrant binary ──────────────────────────────────────
