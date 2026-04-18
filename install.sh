@@ -5,7 +5,7 @@
 # ────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-EASYRAG_VERSION="0.4.1"
+EASYRAG_VERSION="0.4.2"
 RELEASE_BASE_URL="https://github.com/saadiqhorton/EasyRAG/releases/download/v${EASYRAG_VERSION}"
 INSTALL_DIR="${EASYRAG_DIR:-$HOME/.easyrag}"
 DATA_DIR="${INSTALL_DIR}/data"

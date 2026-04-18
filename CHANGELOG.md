@@ -1,12 +1,11 @@
 
+## [0.4.2] - 2026-04-17
+
+### Fixed
+- **Release Synchronization** — Fixed the critical mismatch between the `install.sh` target and the GitHub release asset name.
+- **Public Distribution Path** — Formally standardized the "Lightweight" bundle as the primary public distribution path.
+
 ## [0.4.1] - 2026-04-17
-
-### Changed
-- **Lightweight Installation** — Pivoted from a giant prepackaged bundle to a lightweight one (~150MB download). Python is still bundled, but backend dependencies are now installed on first run to reduce download size.
-- Release bundle size significantly reduced (compressed size ~154MB vs ~3.1GB).
-- Updated `install.sh` to use `--target` for site-package installation in the bundled runtime.
-
-## [0.4.0] - 2026-04-17
 
 ## [0.3.2] - 2026-04-17
 
