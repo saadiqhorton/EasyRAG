@@ -107,6 +107,8 @@ def upgrade() -> None:
         sa.Column("status", sa.String(20), nullable=False, server_default="queued", index=True),
         sa.Column("current_stage", sa.String(20), nullable=True),
         sa.Column("retry_count", sa.Integer, nullable=False, server_default=sa.text("0")),
+        sa.Column("chunks_total", sa.Integer, nullable=True),
+        sa.Column("chunks_processed", sa.Integer, nullable=False, server_default=sa.text("0")),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("completed_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now(), index=True),

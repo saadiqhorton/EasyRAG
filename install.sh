@@ -5,7 +5,7 @@
 # ────────────────────────────────────────────────────────────────
 set -euo pipefail
 
-EASYRAG_VERSION="0.4.0"
+EASYRAG_VERSION="0.4.1"
 RELEASE_BASE_URL="https://github.com/saadiqhorton/EasyRAG/releases/download/v${EASYRAG_VERSION}"
 INSTALL_DIR="${EASYRAG_DIR:-$HOME/.easyrag}"
 DATA_DIR="${INSTALL_DIR}/data"
@@ -92,18 +92,6 @@ if [ ! -f "${RUNTIME_DIR}/bin/python3" ]; then
   fail "Bundled Python runtime not found. Release bundle may be incomplete."
 fi
 ok "Bundled Python runtime found"
-
-# ── Create Python virtual environment ───────────────────────────
-if [ ! -d "${VENV_DIR}" ]; then
-  step "Creating Python virtual environment..."
-  "${RUNTIME_DIR}/bin/python3" -m venv "${VENV_DIR}"
-  ok "Virtual environment created"
-fi
-
-step "Installing Python dependencies..."
-"${VENV_DIR}/bin/pip" install -q --upgrade pip 2>/dev/null || true
-"${VENV_DIR}/bin/pip" install -q -r "${INSTALL_DIR}/backend/requirements.txt"
-ok "Python dependencies installed"
 
 # ── Download Qdrant binary ──────────────────────────────────────
 if [ ! -f "${BIN_DIR}/qdrant" ]; then
@@ -239,7 +227,7 @@ step "Running database migrations..."
 cd "${INSTALL_DIR}"
 set -a; source "${ENV_FILE}"; set +a
 export DATABASE_URL="${DATABASE_URL:-sqlite+aiosqlite:///${INSTALL_DIR}/easyrag.db}"
-"${VENV_DIR}/bin/python" -m alembic -c backend/alembic.ini upgrade head 2>&1 | tail -2 || warn "Migration had issues — may need manual attention"
+"${RUNTIME_DIR}/bin/python3" -m alembic -c backend/alembic.ini upgrade head 2>&1 | tail -2 || warn "Migration had issues — may need manual attention"
 ok "Database initialized"
 
 # ── Success ─────────────────────────────────────────────────────

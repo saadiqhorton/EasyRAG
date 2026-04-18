@@ -29,7 +29,7 @@ No Docker. No Node. No Python setup. Just one command.
 
 ### What you need
 
-- **Linux AMD64** — Nothing else. Python is bundled.
+- **Linux AMD64** — Nothing else. Python is bundled. Bundle size is ~3.1GB compressed / ~6.2GB installed.
 - **Windows** — WSL2 + Ubuntu (free from Microsoft Store)
 - **AI Provider** — Ollama (free, local) or a cloud API key
 
