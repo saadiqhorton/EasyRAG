@@ -67,13 +67,13 @@ step "Setting up EasyRAG at ${INSTALL_DIR}"
 mkdir -p "${INSTALL_DIR}" "${DATA_DIR}" "${LOG_DIR}" "${PID_DIR}" "${BIN_DIR}"
 
 # ── Download release bundle ─────────────────────────────────────
-RELEASE_FILE="easyrag-${EASYRAG_VERSION}-${PLATFORM}.tar.gz"
+RELEASE_FILE="easyrag-${EASYRAG_VERSION}-${PLATFORM}-light.tar.gz"
 RELEASE_URL="${RELEASE_BASE_URL}/${RELEASE_FILE}"
 
 if [ -d "${INSTALL_DIR}/backend" ] && [ -d "${INSTALL_DIR}/runtime" ]; then
   step "Release already extracted"
 else
-  step "Downloading EasyRAG ${EASYRAG_VERSION} for ${PLATFORM}..."
+  step "Downloading EasyRAG ${EASYRAG_VERSION} lightweight bundle..."
   TMPDIR=$(mktemp -d)
   if curl -fSL --progress-bar -o "${TMPDIR}/${RELEASE_FILE}" "${RELEASE_URL}" 2>/dev/null; then
     step "Extracting release..."
@@ -92,6 +92,14 @@ if [ ! -f "${RUNTIME_DIR}/bin/python3" ]; then
   fail "Bundled Python runtime not found. Release bundle may be incomplete."
 fi
 ok "Bundled Python runtime found"
+
+# ── Install Python dependencies ────────────────────────────────
+step "Installing backend dependencies (this may take a few minutes)..."
+# Ensure pip installs into the bundled runtime's site-packages explicitly
+# Use the actual INSTALL_DIR for the target, not just the runtime path
+TARGET_S_P="${INSTALL_DIR}/runtime/lib/python3.12/site-packages"
+"${RUNTIME_DIR}/bin/python3" -m pip install --no-cache-dir --target "${TARGET_S_P}" -r "${INSTALL_DIR}/backend/requirements.txt" || warn "Some dependencies failed to install — check logs"
+ok "Python dependencies installed"
 
 # ── Download Qdrant binary ──────────────────────────────────────
 if [ ! -f "${BIN_DIR}/qdrant" ]; then

@@ -23,7 +23,8 @@ bash ~/.easyrag/start.sh
 Open http://localhost:3000.
 
 The installer:
-- Downloads the prepackaged release bundle (~3.1 GB) containing the Python runtime and all dependencies
+- Downloads the lightweight release bundle (~154 MB) containing the Python runtime
+- Installs backend dependencies into the bundled runtime on first run
 - Extracts the bundle to ~/.easyrag
 - Downloads Qdrant (vector search engine)
 - Generates `.env` with sensible defaults

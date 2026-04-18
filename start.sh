@@ -84,11 +84,11 @@ start_api() {
 
   # Run migrations first
   cd "${EASYRAG_DIR}/backend"
-  "${EASYRAG_DIR}/.venv/bin/python" -m alembic upgrade head 2>> "${LOG_DIR}/api.log" || true
+  "${EASYRAG_DIR}/runtime/bin/python3" -m alembic upgrade head 2>> "${LOG_DIR}/api.log" || true
 
   # Start API from EASYRAG_DIR so 'app' is importable
   cd "${EASYRAG_DIR}"
-  "${EASYRAG_DIR}/.venv/bin/uvicorn" app.backend.main:app \
+  "${EASYRAG_DIR}/runtime/bin/python3" -m uvicorn app.backend.main:app \
     --host 0.0.0.0 --port "${API_PORT}" \
     &>> "${LOG_DIR}/api.log" &
   echo $! > "$pid_file"
@@ -122,7 +122,7 @@ start_worker() {
   export PYTHONPATH="${EASYRAG_DIR}:${PYTHONPATH:-}"
 
   cd "${EASYRAG_DIR}"
-  "${EASYRAG_DIR}/.venv/bin/python" -m app.backend.workers.ingestion_worker \
+  "${EASYRAG_DIR}/runtime/bin/python3" -m app.backend.workers.ingestion_worker \
     &>> "${LOG_DIR}/worker.log" &
   echo $! > "$pid_file"
   cd "${EASYRAG_DIR}"
